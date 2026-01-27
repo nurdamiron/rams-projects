@@ -1,6 +1,5 @@
-const { app, BrowserWindow, globalShortcut, protocol, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, protocol, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 const fs = require('fs');
 
 // Register 'media' as a privileged scheme to bypass some security restrictions
@@ -9,45 +8,79 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow;
-let nextServer;
+let nextApp;
+let server;
 
-// Start Next.js server in production
-function startNextServer() {
-  return new Promise((resolve, reject) => {
-    const isDev = process.env.NODE_ENV === 'development';
+// Start Next.js server in production using embedded server
+async function startNextServer() {
+  const isDev = process.env.NODE_ENV === 'development';
 
-    if (isDev) {
-      // In development, assume server is already running
-      resolve();
-      return;
+  if (isDev) {
+    // In development, assume server is already running
+    console.log('[DEV] Using external Next.js dev server on http://localhost:3000');
+    return;
+  }
+
+  try {
+    console.log('[PROD] Starting embedded Next.js server...');
+
+    // Import Next.js
+    const next = require('next');
+    const http = require('http');
+
+    // Get app directory
+    const appDir = path.join(__dirname, '..');
+    console.log(`[PROD] App directory: ${appDir}`);
+
+    // Check if .next directory exists
+    const nextDir = path.join(appDir, '.next');
+    if (!fs.existsSync(nextDir)) {
+      throw new Error(`.next directory not found at ${nextDir}`);
     }
+    console.log(`[PROD] Found .next build at: ${nextDir}`);
 
-    // In production, start Next.js server
-    const nextPath = path.join(__dirname, '..', 'node_modules', '.bin', 'next');
-    nextServer = spawn(nextPath, ['start'], {
-      cwd: path.join(__dirname, '..'),
-      env: { ...process.env, PORT: '3000' }
-    });
-
-    nextServer.stdout.on('data', (data) => {
-      console.log(`Next.js: ${data}`);
-      if (data.toString().includes('Ready')) {
-        resolve();
+    // Initialize Next.js app
+    nextApp = next({
+      dev: false,
+      dir: appDir,
+      conf: {
+        distDir: '.next',
       }
     });
 
-    nextServer.stderr.on('data', (data) => {
-      console.error(`Next.js Error: ${data}`);
+    await nextApp.prepare();
+    console.log('[PROD] Next.js app prepared');
+
+    const handle = nextApp.getRequestHandler();
+
+    // Create HTTP server
+    server = http.createServer((req, res) => {
+      handle(req, res);
     });
 
-    nextServer.on('error', (error) => {
-      console.error('Failed to start Next.js server:', error);
-      reject(error);
+    // Start listening
+    await new Promise((resolve, reject) => {
+      server.listen(3000, (err) => {
+        if (err) {
+          console.error('[PROD] Failed to start HTTP server:', err);
+          reject(err);
+        } else {
+          console.log('[PROD] Next.js server ready on http://localhost:3000');
+          resolve();
+        }
+      });
     });
+  } catch (error) {
+    console.error('[PROD] Failed to start Next.js server:', error);
 
-    // Fallback timeout
-    setTimeout(resolve, 5000);
-  });
+    // Show error dialog to user
+    dialog.showErrorBox(
+      'Startup Error',
+      `Failed to start the application:\n\n${error.message}\n\nPlease check the logs or contact support.`
+    );
+
+    throw error;
+  }
 }
 
 function createWindow() {
@@ -188,9 +221,24 @@ app.on('activate', function () {
   }
 });
 
-app.on('before-quit', () => {
-  // Kill Next.js server when app is closing
-  if (nextServer) {
-    nextServer.kill();
+app.on('before-quit', async () => {
+  // Close Next.js server when app is closing
+  try {
+    if (server) {
+      console.log('[CLEANUP] Closing HTTP server...');
+      await new Promise((resolve) => {
+        server.close(() => {
+          console.log('[CLEANUP] HTTP server closed');
+          resolve();
+        });
+      });
+    }
+    if (nextApp) {
+      console.log('[CLEANUP] Closing Next.js app...');
+      await nextApp.close();
+      console.log('[CLEANUP] Next.js app closed');
+    }
+  } catch (error) {
+    console.error('[CLEANUP] Error during shutdown:', error);
   }
 });

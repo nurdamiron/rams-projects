@@ -27,7 +27,13 @@
       "public/*.png",
       "public/images/brand/**/*",
       "!public/projects/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/next/**/*"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      ".next/**/*",
+      "node_modules/next/**/*"
     ],
     "directories": {
       "buildResources": "assets",
