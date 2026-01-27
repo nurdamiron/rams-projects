@@ -26,6 +26,7 @@
       "public/*.svg",
       "public/*.png",
       "public/images/brand/**/*",
+      "public/fonts/**/*",
       "!public/projects/**/*",
       "package.json",
       "node_modules/next/**/*"
