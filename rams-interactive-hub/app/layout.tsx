@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme-context";
+import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "RAMS Interactive Hub | Premium Real Estate Presentation",
@@ -28,9 +29,11 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          <ErrorBoundary>
-            {children}
-          </ErrorBoundary>
+          <LanguageProvider>
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

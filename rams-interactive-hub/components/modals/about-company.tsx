@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
+import { useLanguage } from "@/lib/i18n";
 
 export interface AboutCompanyProps {
   isOpen: boolean;
@@ -24,31 +25,32 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
   theme = "dark",
 }) => {
   const isDark = theme === "dark";
+  const { t } = useLanguage();
 
   const stats = [
-    { label: "Год основания", value: "1988", icon: "event" },
-    { label: "Стран присутствия", value: "6", icon: "public" },
-    { label: "Городов", value: "11", icon: "location_city" },
-    { label: "Сотрудников", value: "25,000+", icon: "group" },
-    { label: "Реализованных проектов", value: "100+", icon: "apartment" },
+    { label: t("foundedYear"), value: "1988", icon: "event" },
+    { label: t("countriesPresence"), value: "6", icon: "public" },
+    { label: t("cities"), value: "11", icon: "location_city" },
+    { label: t("employees"), value: "25,000+", icon: "group" },
+    { label: t("completedProjects"), value: "100+", icon: "apartment" },
   ];
 
   const values = [
-    { title: "Доверие", icon: "handshake", description: "Основа всех наших отношений" },
-    { title: "Совесть", icon: "favorite", description: "Честность в каждом решении" },
-    { title: "Справедливость", icon: "balance", description: "Равные возможности для всех" },
-    { title: "Социальная польза", icon: "volunteer_activism", description: "Вклад в общество" },
-    { title: "Устойчивость", icon: "eco", description: "Забота о будущем" },
+    { title: t("trust"), icon: "handshake", description: t("trustDesc") },
+    { title: t("conscience"), icon: "favorite", description: t("conscienceDesc") },
+    { title: t("justice"), icon: "balance", description: t("justiceDesc") },
+    { title: t("socialBenefit"), icon: "volunteer_activism", description: t("socialBenefitDesc") },
+    { title: t("sustainability"), icon: "eco", description: t("sustainabilityDesc") },
   ];
 
   const sectors = [
-    "Недвижимость и девелопмент",
-    "Туризм",
-    "Здравоохранение",
-    "Горнодобывающая промышленность",
-    "Продукты питания и напитки",
-    "Коворкинг пространства",
-    "Мебельное производство",
+    t("realEstate"),
+    t("tourism"),
+    t("healthcare"),
+    t("mining"),
+    t("foodAndBeverages"),
+    t("coworking"),
+    t("furniture"),
   ];
 
   return (
@@ -107,7 +109,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                     "text-sm",
                     isDark ? "text-text-muted-dark" : "text-text-muted"
                   )}>
-                    A next generation real estate development
+                    {t("companySlogan")}
                   </p>
                 </div>
               </div>
@@ -142,7 +144,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                   )}
                 >
                   <Icon name="lightbulb" className="text-primary" />
-                  Миссия и Видение
+                  {t("missionAndVision")}
                 </h3>
                 <div className="space-y-3">
                   <p
@@ -151,9 +153,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                       isDark ? "text-text-muted-dark" : "text-text-muted"
                     )}
                   >
-                    Мы стремимся стать глобально влиятельным брендом во всех секторах, повышая
-                    стандарты жизни во всем мире через передовые, устойчивые проекты. Наша цель —
-                    добавлять ценность жизням людей, природе и будущему.
+                    {t("missionText")}
                   </p>
                 </div>
               </section>
@@ -167,7 +167,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                   )}
                 >
                   <Icon name="history" className="text-primary" />
-                  История
+                  {t("history")}
                 </h3>
                 <p
                   className={cn(
@@ -175,10 +175,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                     isDark ? "text-text-muted-dark" : "text-text-muted"
                   )}
                 >
-                  Основанная в 1988 году в Газиантепе Рамазаном Бюльбюлем, компания RAMS Global
-                  расширилась в Казахстан в 1993 году. С основным офисом в Алматы, мы работаем в
-                  6 странах в 11 городах, реализовав почти 100 проектов в Казахстане, Турции,
-                  Таиланде, Дубае, Германии и Ираке.
+                  {t("historyText")}
                 </p>
               </section>
 
@@ -191,7 +188,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                   )}
                 >
                   <Icon name="analytics" className="text-primary" />
-                  Ключевые показатели
+                  {t("keyMetrics")}
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   {stats.map((stat, index) => (
@@ -246,7 +243,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                   )}
                 >
                   <Icon name="stars" className="text-primary" />
-                  Наши ценности
+                  {t("ourValues")}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {values.map((value, index) => (
@@ -303,7 +300,7 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                   )}
                 >
                   <Icon name="category" className="text-primary" />
-                  Сектора деятельности
+                  {t("businessSectors")}
                 </h3>
                 <div className="flex flex-wrap gap-3">
                   {sectors.map((sector, index) => (
@@ -335,10 +332,10 @@ export const AboutCompany: React.FC<AboutCompanyProps> = ({
                   isDark ? "text-text-muted-dark" : "text-text-muted"
                 )}
               >
-                © 1988-2026 RAMS Global. Все права защищены.
+                © 1988-2026 RAMS Global. {t("allRightsReserved")}
               </div>
               <Button variant="primary" size="md" onClick={onClose}>
-                Закрыть
+                {t("close")}
               </Button>
             </div>
           </motion.div>

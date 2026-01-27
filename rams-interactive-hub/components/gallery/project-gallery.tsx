@@ -12,6 +12,8 @@ import { Project } from "@/lib/types";
 import { ProjectCard } from "./project-card";
 import { Button } from "@/components/ui/button";
 import { getMediaUrl } from "@/lib/media-utils";
+import { LanguageSwitcher } from "@/components/ui/language-switcher";
+import { useLanguage } from "@/lib/i18n";
 
 import { staggerContainer, fadeInUp, easings } from "@/lib/animations";
 
@@ -32,6 +34,7 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
 }) => {
   const isDark = theme === "dark";
   const { toggleTheme } = require("@/lib/theme-context").useTheme();
+  const { t } = useLanguage();
   // Use direct path for brand assets (always available in public folder)
   const logoSrc = "/images/brand/rams-logo.png";
 
@@ -69,6 +72,15 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
 
             {/* Right side buttons */}
             <div className="absolute right-0 top-0 flex items-center gap-3 z-50">
+              {/* Language Switcher */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+              >
+                <LanguageSwitcher theme={theme} />
+              </motion.div>
+
               {/* About Company Button */}
               <motion.button
                 onClick={onAboutCompany}
@@ -84,7 +96,7 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                О КОМПАНИИ
+                {t("aboutCompany")}
               </motion.button>
 
               {/* Theme Toggle Button */}

@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getMediaUrl } from "@/lib/media-utils";
+import { useLanguage } from "@/lib/i18n";
 
 interface InfoOverlayProps {
     project: Project;
@@ -23,6 +24,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
 }) => {
     const isDark = theme === "dark";
     const logoSource = getMediaUrl(project.logo || project.image);
+    const { t } = useLanguage();
 
     return (
         <AnimatePresence>
@@ -110,24 +112,24 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                         {project.info.deadline}
                                         {project.info.quarter && <span className="text-lg text-white/60 ml-1">{project.info.quarter}</span>}
                                     </div>
-                                    <div className="text-sm text-white/50 mt-1">Срок сдачи</div>
+                                    <div className="text-sm text-white/50 mt-1">{t("deadline")}</div>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                                     <Icon name="business" className="text-primary mb-2" size="sm" />
                                     <div className="text-2xl font-bold text-white">{project.info.class}</div>
-                                    <div className="text-sm text-white/50 mt-1">Класс жилья</div>
+                                    <div className="text-sm text-white/50 mt-1">{t("housingClass")}</div>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                                     <Icon name="layers" className="text-primary mb-2" size="sm" />
                                     <div className="text-2xl font-bold text-white">{project.info.floors}</div>
-                                    <div className="text-sm text-white/50 mt-1">Этажей</div>
+                                    <div className="text-sm text-white/50 mt-1">{t("floors")}</div>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                                     <Icon name="apartment" className="text-primary mb-2" size="sm" />
                                     <div className="text-2xl font-bold text-white">
                                         {project.info.units > 0 ? project.info.units : "—"}
                                     </div>
-                                    <div className="text-sm text-white/50 mt-1">Квартир</div>
+                                    <div className="text-sm text-white/50 mt-1">{t("apartments")}</div>
                                 </div>
                             </div>
 
@@ -137,7 +139,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                     <Icon name="straighten" className="text-primary" />
                                     <div>
                                         <div className="text-lg font-bold text-white">{project.info.ceilingHeight}</div>
-                                        <div className="text-sm text-white/50">Высота потолков</div>
+                                        <div className="text-sm text-white/50">{t("ceilingHeight")}</div>
                                     </div>
                                 </div>
                                 <div className="flex-1 p-4 rounded-2xl bg-white/5 flex items-center gap-4">
@@ -153,7 +155,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                             <section>
                                 <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                                     <Icon name="article" size="sm" />
-                                    О проекте
+                                    {t("aboutProject")}
                                 </h3>
                                 <p className="text-base leading-relaxed text-white/80">
                                     {project.description}
@@ -165,7 +167,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                 <section>
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                                         <Icon name="stars" size="sm" />
-                                        Особенности ({project.features.length})
+                                        {t("features")} ({project.features.length})
                                     </h3>
                                     <div className="grid grid-cols-1 gap-2">
                                         {project.features.map((feature, idx) => (
@@ -201,7 +203,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                 onClick={onClose}
                                 className="text-white/60 hover:text-white hover:bg-white/10"
                             >
-                                Закрыть
+                                {t("close")}
                             </Button>
                         </div>
                     </motion.div>
