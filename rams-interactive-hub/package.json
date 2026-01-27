@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "main": "electron/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nurdamiron/rams-projects.git"
+  },
+  "author": "RAMS Global",
+  "description": "Interactive presentation hub for RAMS real estate projects",
   "scripts": {
     "dev": "TURBOPACK=0 next dev",
     "build": "next build",
@@ -28,6 +34,7 @@
       "output": "dist"
     },
     "npmRebuild": false,
+    "publish": null,
     "win": {
       "target": [
         {
