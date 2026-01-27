@@ -1,0 +1,54 @@
+# Large archives
+*.zip
+*.rar
+*.7z
+
+# Windows build
+RAMS-Hub-Windows/
+
+# Media files - videos
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Executables
+*.exe
+*.asar
+
+# Large images folders
+РАМС ЛОГО И РЕНДЕРЫ ДЛЯ ПРИЛОЖЕНИЯ/
+
+# Project media (large files)
+rams-interactive-hub/public/projects/*/videos/
+rams-interactive-hub/public/projects/*/images/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules
+node_modules/
+.next/
+dist/
+build/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Extracted info
+project-info-extracted/
+Информация по проектам/

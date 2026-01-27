@@ -1,0 +1,676 @@
+/**
+ * RAMS Interactive Hub - Project Data
+ * Real RAMS Kazakhstan Projects
+ */
+
+import { Project } from "../types";
+
+export const RAMS_PROJECTS: Project[] = [
+  {
+    id: "rams-signature",
+    slug: "rams-signature",
+    name: "RAMS SIGNATURE",
+    title: "LIFESTYLE QUARTER",
+    subtitle: "Премиум класс в сердце Алматы",
+    description:
+      "Флагманский проект RAMS Global площадью 80,000 м², расположенный в самом сердце делового района Алматы на пересечении улиц Байтурсынова и Тимирязева. Окружен торговым центром FORUM, офисными зданиями, образовательными центрами и парками. Проект сочетает роскошь, комфорт и инновационные технологии.",
+    status: "В продаже",
+    statusBadge: "PREMIUM",
+    image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/rams-signature/logo.svg",
+    info: {
+      class: "Premium Class",
+      floors: 25,
+      units: 496,
+      ceilingHeight: "3.0м",
+      deadline: "2025",
+      quarter: "IV квартал",
+    },
+    locations: [
+      {
+        label: "Парковая зона",
+        distance: "300м",
+        progress: 85,
+      },
+      {
+        label: "Деловой центр",
+        distance: "500м",
+        progress: 75,
+      },
+      {
+        label: "Школы и сады",
+        distance: "600м",
+        progress: 70,
+      },
+      {
+        label: "Метро",
+        distance: "800м",
+        progress: 60,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Главный фасад",
+        image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1920&h=1080&fit=crop",
+        isActive: true,
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Входная группа",
+        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1920&h=1080&fit=crop",
+      },
+      {
+        id: "courtyard",
+        type: "Двор",
+        title: "Внутренний двор",
+        image: "https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=1920&h=1080&fit=crop",
+      },
+      {
+        id: "office",
+        type: "Офис",
+        title: "Коворкинг",
+        image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1920&h=1080&fit=crop",
+      },
+    ],
+    features: [
+      "Система умный дом",
+      "Круглосуточная охрана и видеонаблюдение",
+      "Подземный паркинг на 2 уровня",
+      "Спортивно-оздоровительный комплекс",
+      "Детские и спортивные площадки",
+      "Ландшафтный дизайн премиум-класса",
+      "Приватная территория с зоной отдыха",
+      "Панорамное остекление",
+    ],
+    concept:
+      "RAMS Signature — это не просто жилой комплекс, это новый стандарт жизни премиум-класса. Архитектурное решение сочетает в себе элегантность классических форм и современные технологии, создавая уникальное пространство для комфортной жизни в центре города.",
+    salesProgress: 65,
+    constructionTimeline: "Q3 2025",
+  },
+  {
+    id: "grande-vie",
+    slug: "grande-vie",
+    name: "GRANDE VIE",
+    title: "ФРАНЦУЗСКИЙ ШАРМ",
+    subtitle: "Сдан и заселен",
+    description:
+      "Воплощение французской элегантности и утонченности в архитектуре Алматы. Grande Vie предлагает роскошные апартаменты с продуманными планировками и премиальной отделкой. Проект полностью завершен и заселен.",
+    status: "Сдан",
+    statusBadge: "СДАН",
+    image: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/grande-vie/logo.svg",
+    info: {
+      class: "Business Elite",
+      floors: 22,
+      units: 142,
+      ceilingHeight: "2.9м",
+      deadline: "2024",
+      quarter: "II квартал",
+    },
+    locations: [
+      {
+        label: "Центральный парк",
+        distance: "200м",
+        progress: 90,
+      },
+      {
+        label: "Торговый центр",
+        distance: "350м",
+        progress: 85,
+      },
+      {
+        label: "Школы",
+        distance: "450м",
+        progress: 80,
+      },
+      {
+        label: "Метро",
+        distance: "700м",
+        progress: 65,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Главный вход",
+        image: "/images/projects/grande-vie/scenes/facade.jpg",
+        isActive: true,
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Холл",
+        image: "/images/projects/grande-vie/scenes/lobby.jpg",
+      },
+      {
+        id: "courtyard",
+        type: "Двор",
+        title: "Территория",
+        image: "/images/projects/grande-vie/scenes/courtyard.jpg",
+      },
+    ],
+    features: [
+      "Премиальная отделка",
+      "Французские окна",
+      "Подземный паркинг",
+      "Закрытая территория",
+      "Детские площадки",
+      "Фитнес-центр",
+    ],
+    concept:
+      "Grande Vie воплощает французскую философию красоты и комфорта. Изящные фасады, продуманные до мелочей планировки и высококачественные материалы создают атмосферу изысканности и роскоши.",
+    salesProgress: 100,
+    constructionTimeline: "Завершено",
+  },
+  {
+    id: "rams-city",
+    slug: "rams-city",
+    name: "RAMS CITY",
+    title: "ГОРОДСКАЯ РЕЗИДЕНЦИЯ",
+    subtitle: "Крупнейший проект RAMS",
+    description:
+      "Масштабный жилой комплекс площадью 600,121 м² на пересечении улицы Жандосова и реки Большая Алматинка. Отличная транспортная доступность и близость к основным магистралям города. С площадями квартир от 27.80 м², проект предлагает оптимальное сочетание цены и качества для тех, кто ценит комфорт городской жизни.",
+    status: "В продаже",
+    statusBadge: "BESTSELLER",
+    image: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/rams-city/logo.svg",
+    info: {
+      class: "Business",
+      floors: 25,
+      units: 2645,
+      ceilingHeight: "2.8м",
+      deadline: "2024",
+      quarter: "IV квартал",
+    },
+    locations: [
+      {
+        label: "Парк",
+        distance: "400м",
+        progress: 75,
+      },
+      {
+        label: "Супермаркеты",
+        distance: "250м",
+        progress: 88,
+      },
+      {
+        label: "Школы",
+        distance: "500м",
+        progress: 72,
+      },
+      {
+        label: "Метро",
+        distance: "1.2км",
+        progress: 50,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Архитектура",
+        image: "/images/projects/rams-city/scenes/facade.jpg",
+        video: "/videos/projects/rams-city/facade.mp4",
+        isActive: true,
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Вход",
+        image: "/images/projects/rams-city/scenes/lobby.jpg",
+      },
+      {
+        id: "courtyard",
+        type: "Двор",
+        title: "Двор",
+        image: "/images/projects/rams-city/scenes/courtyard.jpg",
+        video: "/videos/projects/rams-city/courtyard.mp4",
+      },
+      {
+        id: "panorama",
+        type: "Панорама",
+        title: "Вид сверху",
+        image: "/images/projects/rams-city/scenes/panorama.jpg",
+      },
+    ],
+    features: [
+      "Оптимальные планировки",
+      "Охраняемая территория",
+      "Паркинг",
+      "Детские площадки",
+      "Спортивные зоны",
+      "Видеонаблюдение",
+    ],
+    concept:
+      "RAMS City создан для активных людей, ценящих динамику городской жизни. Удобное расположение, развитая инфраструктура и продуманные решения делают его идеальным выбором для молодых семей.",
+    salesProgress: 48,
+    constructionTimeline: "Q4 2025",
+  },
+  {
+    id: "la-verde",
+    slug: "la-verde",
+    name: "LA VERDE",
+    title: "ЗЕЛЕНЫЙ ОАЗИС",
+    subtitle: "Lifestyle-focused project",
+    description:
+      "Уникальный lifestyle-ориентированный проект площадью 28,477 м², объединяющий комфорт городской жизни с близостью к природе. Реализован в 2020-2022 годах. LA VERDE — это концепция экологичного жилья с акцентом на зеленые зоны, здоровый образ жизни и современный стиль.",
+    status: "Сдан",
+    statusBadge: "COMPLETED",
+    image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/la-verde/logo.svg",
+    info: {
+      class: "Lifestyle Premium",
+      floors: 15,
+      units: 152,
+      ceilingHeight: "3.0м",
+      deadline: "2022",
+      quarter: "IV квартал",
+    },
+    locations: [
+      {
+        label: "Ботанический сад",
+        distance: "100м",
+        progress: 95,
+      },
+      {
+        label: "Парки",
+        distance: "50м",
+        progress: 98,
+      },
+      {
+        label: "Велодорожки",
+        distance: "150м",
+        progress: 92,
+      },
+      {
+        label: "Торговый центр",
+        distance: "600м",
+        progress: 68,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Зеленый фасад",
+        image: "/images/projects/la-verde/scenes/facade.jpg",
+        video: "/videos/projects/la-verde/facade.mp4",
+        isActive: true,
+      },
+      {
+        id: "courtyard",
+        type: "Двор",
+        title: "Парковая зона",
+        image: "/images/projects/la-verde/scenes/courtyard.jpg",
+        video: "/videos/projects/la-verde/courtyard.mp4",
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Eco-лобби",
+        image: "/images/projects/la-verde/scenes/lobby.jpg",
+      },
+    ],
+    features: [
+      "Вертикальное озеленение",
+      "Eco-friendly технологии",
+      "Солнечные панели",
+      "Система рекуперации воды",
+      "Велопарковка",
+      "Органический сад",
+      "Фитнес на свежем воздухе",
+      "Зоны для медитации",
+    ],
+    concept:
+      "LA VERDE — это философия гармоничного сосуществования с природой в условиях мегаполиса. Инновационные экологические решения и обилие зеленых зон создают уникальную атмосферу для здоровой и счастливой жизни.",
+    salesProgress: 38,
+    constructionTimeline: "Q2 2026",
+  },
+  {
+    id: "rams-beyond",
+    slug: "rams-beyond",
+    name: "RAMS BEYOND ALMATY",
+    title: "NEXT GENERATION LIVING",
+    subtitle: "Флагманский проект 2025",
+    description:
+      "Премиальный 40-этажный многофункциональный комплекс площадью 4.5 гектара в Бостандыкском районе. Интегрирует люксовые резиденции, офисы высокого класса, пятизвездочный отель, коммерческие пространства и панорамные общественные зоны. Победитель Building Innovation Awards UK 2024. Публичная презентация состоялась в мае 2025 года с участием турецкого актера Бурака Озчивита в качестве амбассадора бренда.",
+    status: "В продаже",
+    statusBadge: "FLAGSHIP",
+    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/rams-beyond/logo.svg",
+    info: {
+      class: "Luxury Mixed-Use",
+      floors: 40,
+      units: 450,
+      ceilingHeight: "3.2м",
+      deadline: "2027",
+      quarter: "II квартал",
+    },
+    locations: [
+      {
+        label: "Деловой центр",
+        distance: "400м",
+        progress: 78,
+      },
+      {
+        label: "Торговые центры",
+        distance: "300м",
+        progress: 82,
+      },
+      {
+        label: "Парк",
+        distance: "550м",
+        progress: 70,
+      },
+      {
+        label: "Метро",
+        distance: "900м",
+        progress: 58,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Башни",
+        image: "/images/projects/harmony-towers/scenes/facade.jpg",
+        video: "/videos/projects/harmony-towers/facade.mp4",
+        isActive: true,
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Двойное лобби",
+        image: "/images/projects/harmony-towers/scenes/lobby.jpg",
+      },
+      {
+        id: "panorama",
+        type: "Панорама",
+        title: "360° вид",
+        image: "/images/projects/harmony-towers/scenes/panorama.jpg",
+      },
+      {
+        id: "office",
+        type: "Офис",
+        title: "Бизнес-центр",
+        image: "/images/projects/harmony-towers/scenes/office.jpg",
+      },
+    ],
+    features: [
+      "Две башни 26 этажей",
+      "Панорамные виды",
+      "Бизнес-центр",
+      "СПА и фитнес",
+      "Подземный паркинг 3 уровня",
+      "Консьерж-сервис",
+      "Детский клуб",
+      "Roof-top терраса",
+    ],
+    concept:
+      "Harmony Towers — это архитектурная симфония, где каждая деталь продумана для создания гармоничного пространства. Высокие технологии, премиальный сервис и широкий выбор планировок делают проект универсальным решением для разных семей.",
+    salesProgress: 22,
+    constructionTimeline: "Q1 2027",
+  },
+  {
+    id: "rams-garden",
+    slug: "rams-garden",
+    name: "RAMS GARDEN KAZAKHSTAN",
+    title: "ALL IN ONE",
+    subtitle: "Инновационная концепция",
+    description:
+      "Инновационный проект площадью 87,021 м² с уникальной концепцией 'All In One', объединяющей все необходимые удобства для современной жизни. 643 квартиры в комплексе с развитой инфраструктурой. Строительство 2022-2025. Каждый этаж оборудован зелеными террасами, создавая ощущение жизни в парке на любой высоте.",
+    status: "В продаже",
+    statusBadge: "ALL IN ONE",
+    image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/rams-garden/logo.svg",
+    info: {
+      class: "Premium Garden",
+      floors: 20,
+      units: 643,
+      ceilingHeight: "3.0м",
+      deadline: "2025",
+      quarter: "IV квартал",
+    },
+    locations: [
+      {
+        label: "Парк Горького",
+        distance: "250м",
+        progress: 88,
+      },
+      {
+        label: "Набережная",
+        distance: "400м",
+        progress: 80,
+      },
+      {
+        label: "Школы",
+        distance: "500м",
+        progress: 75,
+      },
+      {
+        label: "Метро",
+        distance: "600м",
+        progress: 72,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Зеленые террасы",
+        image: "/images/projects/sky-gardens/scenes/facade.jpg",
+        isActive: true,
+      },
+      {
+        id: "courtyard",
+        type: "Двор",
+        title: "Сад на крыше",
+        image: "/images/projects/sky-gardens/scenes/courtyard.jpg",
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Атриум",
+        image: "/images/projects/sky-gardens/scenes/lobby.jpg",
+      },
+    ],
+    features: [
+      "Террасы-сады на каждом этаже",
+      "Вертикальное озеленение",
+      "Автоматическая система полива",
+      "Панорамное остекление",
+      "Подземный паркинг",
+      "Спа-зона",
+    ],
+    concept:
+      "Sky Gardens воплощает мечту о жизни среди зелени даже в условиях высотного здания. Инновационная система вертикального озеленения и продуманные террасы создают уникальную атмосферу единения с природой.",
+    salesProgress: 100,
+    constructionTimeline: "Завершено",
+  },
+  {
+    id: "rams-noa",
+    slug: "rams-noa",
+    name: "RAMS NOA",
+    title: "НОВАЯ ВЫСОТА",
+    subtitle: "Скоро в продаже",
+    description:
+      "Следующий шаг в эволюции жилой недвижимости от RAMS. Проект NOA (New One Avenue) устанавливает новые стандарты премиального жилья с фокусом на технологии и устойчивое развитие.",
+    status: "Скоро",
+    statusBadge: "COMING SOON",
+    image: "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/rams-noa/logo.svg",
+    info: {
+      class: "Ultra Premium",
+      floors: 28,
+      units: 186,
+      ceilingHeight: "3.2м",
+      deadline: "2027",
+      quarter: "III квартал",
+    },
+    locations: [
+      {
+        label: "Новый деловой центр",
+        distance: "200м",
+        progress: 92,
+      },
+      {
+        label: "Premium торговый центр",
+        distance: "300м",
+        progress: 85,
+      },
+      {
+        label: "Парковая зона",
+        distance: "450м",
+        progress: 77,
+      },
+      {
+        label: "Метро (новая линия)",
+        distance: "500м",
+        progress: 75,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Концепт фасада",
+        image: "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1920&h=1080&fit=crop",
+        isActive: true,
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Smart лобби",
+        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1920&h=1080&fit=crop",
+      },
+      {
+        id: "panorama",
+        type: "Панорама",
+        title: "Пентхаус",
+        image: "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=1920&h=1080&fit=crop",
+      },
+    ],
+    features: [
+      "AI-управление зданием",
+      "Smart Home Premium",
+      "Зарядные станции для электромобилей",
+      "Бесконтактный доступ",
+      "Skylobby на 15 этаже",
+      "Infinity pool на крыше",
+      "Private SPA",
+      "Консьерж 24/7",
+    ],
+    concept:
+      "RAMS NOA — это будущее премиального жилья уже сегодня. Интеграция искусственного интеллекта, устойчивые технологии и непревзойденный уровень комфорта создают новую реальность городской жизни.",
+    salesProgress: 0,
+    constructionTimeline: "Q3 2027",
+  },
+  {
+    id: "lumiere",
+    slug: "lumiere",
+    name: "LUMIERE",
+    title: "СВЕТ ЖИЗНИ",
+    subtitle: "Активные продажи",
+    description:
+      "Элегантный проект, вдохновленный игрой света и архитектурными традициями европейских столиц. LUMIERE предлагает изысканные апартаменты с максимальным естественным освещением.",
+    status: "В продаже",
+    statusBadge: "BESTSELLER",
+    image: "https://images.unsplash.com/photo-1565008576549-57569a49371d?w=800&h=1000&fit=crop",
+    heroImage: "https://images.unsplash.com/photo-1565008576549-57569a49371d?w=1920&h=1080&fit=crop",
+    logo: "/images/projects/lumiere/logo.svg",
+    info: {
+      class: "Premium Light",
+      floors: 19,
+      units: 144,
+      ceilingHeight: "3.0м",
+      deadline: "2026",
+      quarter: "I квартал",
+    },
+    locations: [
+      {
+        label: "Центральный парк",
+        distance: "350м",
+        progress: 80,
+      },
+      {
+        label: "Культурный центр",
+        distance: "400м",
+        progress: 78,
+      },
+      {
+        label: "Школы",
+        distance: "550м",
+        progress: 70,
+      },
+      {
+        label: "Метро",
+        distance: "750м",
+        progress: 65,
+      },
+    ],
+    scenes: [
+      {
+        id: "facade",
+        type: "Фасад",
+        title: "Светлый фасад",
+        image: "https://images.unsplash.com/photo-1565008576549-57569a49371d?w=1920&h=1080&fit=crop",
+        isActive: true,
+      },
+      {
+        id: "lobby",
+        type: "Лобби",
+        title: "Атриум света",
+        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1920&h=1080&fit=crop",
+      },
+      {
+        id: "courtyard",
+        type: "Двор",
+        title: "Светлый двор",
+        image: "https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=1920&h=1080&fit=crop",
+      },
+    ],
+    features: [
+      "Панорамные окна от пола до потолка",
+      "Световые колодцы",
+      "Южная ориентация большинства квартир",
+      "Французские балконы",
+      "Паркинг",
+      "Фитнес-центр",
+      "Детский клуб",
+    ],
+    concept:
+      "LUMIERE создан для тех, кто ценит естественный свет и простор. Архитектурное решение максимизирует естественное освещение в каждой квартире, создавая атмосферу легкости и воздушности.",
+    salesProgress: 56,
+    constructionTimeline: "Q1 2026",
+  },
+];
+
+export const getProjectBySlug = (slug: string): Project | undefined => {
+  return RAMS_PROJECTS.find((project) => project.slug === slug);
+};
+
+export const getProjectById = (id: string): Project | undefined => {
+  return RAMS_PROJECTS.find((project) => project.id === id);
+};
+
+export const getActiveProjects = (): Project[] => {
+  return RAMS_PROJECTS.filter(
+    (project) =>
+      project.status === "В продаже" || project.status === "Строится"
+  );
+};
+
+export const getCompletedProjects = (): Project[] => {
+  return RAMS_PROJECTS.filter((project) => project.status === "Сдан");
+};
