@@ -12,6 +12,7 @@ import { Project } from "@/lib/types";
 import { staggerItem, easings } from "@/lib/animations";
 import { hardwareService } from "@/lib/hardware-service";
 import { getMediaUrl } from "@/lib/media-utils";
+import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass } from "@/lib/i18n";
 
 export interface ProjectCardProps {
   project: Project;
@@ -30,6 +31,16 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const isDark = theme === "dark";
   const logoSource = getMediaUrl(project.logo || project.image);
+  const { language } = useLanguage();
+
+  // Get localized project data
+  const localizedProject = getLocalizedProject(project.id, language);
+  const localizedStatus = getLocalizedStatus(project.status, language);
+  const localizedClass = getLocalizedClass(project.info.class, language);
+
+  // Localized labels for stats
+  const floorsLabel: Record<string, string> = { ru: "эт.", kk: "қаб.", tr: "kat", en: "fl." };
+  const unitsLabel: Record<string, string> = { ru: "кв.", kk: "пәт.", tr: "dai.", en: "apt." };
 
   // Check if project has only video (no real images)
   const hasOnlyVideo = project.image?.includes("placeholder") &&
@@ -141,7 +152,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
                 ? "bg-amber-500/80 text-white border-amber-400/50"
                 : "bg-emerald-500/80 text-white border-emerald-400/50"
             )}>
-              {project.status}
+              {localizedStatus}
             </span>
           </div>
 
@@ -165,9 +176,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
               </h3>
 
               {/* Title / Subtitle */}
-              {(project.title || project.subtitle) && (
+              {(localizedProject?.title || project.title || project.subtitle) && (
                 <p className="text-white/70 text-sm mt-0.5">
-                  {project.title || project.subtitle}
+                  {localizedProject?.title || project.title || project.subtitle}
                 </p>
               )}
 
@@ -183,16 +194,16 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
               >
                 <span className="flex items-center gap-1">
                   <span className="w-1 h-1 rounded-full bg-primary" />
-                  {project.info.class}
+                  {localizedClass}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-1 h-1 rounded-full bg-primary" />
-                  {project.info.floors} эт.
+                  {project.info.floors} {floorsLabel[language]}
                 </span>
                 {project.info.units > 0 && (
                   <span className="flex items-center gap-1">
                     <span className="w-1 h-1 rounded-full bg-primary" />
-                    {project.info.units} кв.
+                    {project.info.units} {unitsLabel[language]}
                   </span>
                 )}
               </motion.div>

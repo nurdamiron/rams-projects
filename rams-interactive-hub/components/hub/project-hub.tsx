@@ -15,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { InfoOverlay } from "./info-overlay";
 import { getMediaUrl } from "@/lib/media-utils";
+import { useLanguage, getLocalizedSceneType } from "@/lib/i18n";
 
 export interface ProjectHubProps {
   project: Project;
@@ -29,6 +30,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   theme = "dark",
   onBack,
 }) => {
+  const { language } = useLanguage();
   // Prioritize video scene as initial if available
   const getInitialScene = (): Scene => {
     // First check if there's an explicitly active scene
@@ -409,7 +411,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                   {/* Scene Type Label */}
                   {scene.type && (
                     <div className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm">
-                      <span className="text-white/80 text-xs">{scene.type}</span>
+                      <span className="text-white/80 text-xs">{getLocalizedSceneType(scene.type, language)}</span>
                     </div>
                   )}
 

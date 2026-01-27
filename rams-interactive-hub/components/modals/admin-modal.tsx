@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { RAMS_PROJECTS } from "@/lib/data/projects";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, getLocalizedStatus } from "@/lib/i18n";
 
 interface MediaStats {
   projectId: string;
@@ -36,7 +36,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [saved, setSaved] = React.useState(false);
   const [mediaStats, setMediaStats] = React.useState<Record<string, MediaStats>>({});
   const [loadingStats, setLoadingStats] = React.useState(true);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   // Load real media stats from API
   React.useEffect(() => {
@@ -302,7 +302,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             : "bg-green-500/20 text-green-400"
                         }`}
                       >
-                        {project.status}
+                        {getLocalizedStatus(project.status, language)}
                       </div>
 
                       {/* Media Stats */}

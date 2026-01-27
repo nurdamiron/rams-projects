@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getMediaUrl } from "@/lib/media-utils";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass } from "@/lib/i18n";
 
 interface InfoOverlayProps {
     project: Project;
@@ -24,7 +24,12 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
 }) => {
     const isDark = theme === "dark";
     const logoSource = getMediaUrl(project.logo || project.image);
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+
+    // Get localized project data
+    const localizedProject = getLocalizedProject(project.id, language);
+    const localizedStatus = getLocalizedStatus(project.status, language);
+    const localizedClass = getLocalizedClass(project.info.class, language);
 
     return (
         <AnimatePresence>
@@ -75,9 +80,9 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                     <h2 className="text-3xl font-bold text-white tracking-tight">
                                         {project.name}
                                     </h2>
-                                    {project.title && (
+                                    {(localizedProject?.title || project.title) && (
                                         <p className="text-lg text-white/60 font-medium mt-1">
-                                            {project.title}
+                                            {localizedProject?.title || project.title}
                                         </p>
                                     )}
                                 </div>
@@ -91,7 +96,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                         ? "bg-amber-500/20 text-amber-400"
                                         : "bg-emerald-500/20 text-emerald-400"
                                 )}>
-                                    {project.status}
+                                    {localizedStatus}
                                 </span>
                                 {project.statusBadge && (
                                     <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-primary/20 text-primary">
@@ -116,7 +121,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                 </div>
                                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                                     <Icon name="business" className="text-primary mb-2" size="sm" />
-                                    <div className="text-2xl font-bold text-white">{project.info.class}</div>
+                                    <div className="text-2xl font-bold text-white">{localizedClass}</div>
                                     <div className="text-sm text-white/50 mt-1">{t("housingClass")}</div>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
@@ -158,19 +163,19 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                     {t("aboutProject")}
                                 </h3>
                                 <p className="text-base leading-relaxed text-white/80">
-                                    {project.description}
+                                    {localizedProject?.description || project.description}
                                 </p>
                             </section>
 
                             {/* Features */}
-                            {project.features && project.features.length > 0 && (
+                            {((localizedProject?.features && localizedProject.features.length > 0) || (project.features && project.features.length > 0)) && (
                                 <section>
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                                         <Icon name="stars" size="sm" />
-                                        {t("features")} ({project.features.length})
+                                        {t("features")} ({(localizedProject?.features || project.features).length})
                                     </h3>
                                     <div className="grid grid-cols-1 gap-2">
-                                        {project.features.map((feature, idx) => (
+                                        {(localizedProject?.features || project.features).map((feature, idx) => (
                                             <motion.div
                                                 key={idx}
                                                 className="flex items-start gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors"
