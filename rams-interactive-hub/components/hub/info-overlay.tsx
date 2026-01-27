@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getMediaUrl } from "@/lib/media-utils";
-import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass } from "@/lib/i18n";
+import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass, getLocalizedQuarter, getLocalizedLocation, getLocalizedCeilingHeight, getLocalizedDistance, isProjectUnderConstruction } from "@/lib/i18n";
 
 interface InfoOverlayProps {
     project: Project;
@@ -92,7 +92,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                             <div className="mt-5 flex items-center gap-3">
                                 <span className={cn(
                                     "px-4 py-1.5 rounded-full text-sm font-semibold",
-                                    project.status === "Строится" || project.status.includes("очередь")
+                                    isProjectUnderConstruction(project.status)
                                         ? "bg-amber-500/20 text-amber-400"
                                         : "bg-emerald-500/20 text-emerald-400"
                                 )}>
@@ -115,7 +115,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                     <Icon name="event" className="text-primary mb-2" size="sm" />
                                     <div className="text-2xl font-bold text-white">
                                         {project.info.deadline}
-                                        {project.info.quarter && <span className="text-lg text-white/60 ml-1">{project.info.quarter}</span>}
+                                        {project.info.quarter && <span className="text-lg text-white/60 ml-1">{getLocalizedQuarter(project.info.quarter, language)}</span>}
                                     </div>
                                     <div className="text-sm text-white/50 mt-1">{t("deadline")}</div>
                                 </div>
@@ -143,15 +143,15 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                 <div className="flex-1 p-4 rounded-2xl bg-white/5 flex items-center gap-4">
                                     <Icon name="straighten" className="text-primary" />
                                     <div>
-                                        <div className="text-lg font-bold text-white">{project.info.ceilingHeight}</div>
+                                        <div className="text-lg font-bold text-white">{getLocalizedCeilingHeight(project.info.ceilingHeight, language)}</div>
                                         <div className="text-sm text-white/50">{t("ceilingHeight")}</div>
                                     </div>
                                 </div>
                                 <div className="flex-1 p-4 rounded-2xl bg-white/5 flex items-center gap-4">
                                     <Icon name="location_on" className="text-primary" />
                                     <div>
-                                        <div className="text-lg font-bold text-white">{project.locations[0]?.label}</div>
-                                        <div className="text-sm text-white/50">{project.locations[0]?.distance}</div>
+                                        <div className="text-lg font-bold text-white">{getLocalizedLocation(project.locations[0]?.label ?? "", language)}</div>
+                                        <div className="text-sm text-white/50">{getLocalizedDistance(project.locations[0]?.distance ?? "", language)}</div>
                                     </div>
                                 </div>
                             </div>
@@ -172,10 +172,10 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                                 <section>
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                                         <Icon name="stars" size="sm" />
-                                        {t("features")} ({(localizedProject?.features || project.features).length})
+                                        {t("features")} ({(localizedProject?.features ?? project.features ?? []).length})
                                     </h3>
                                     <div className="grid grid-cols-1 gap-2">
-                                        {(localizedProject?.features || project.features).map((feature, idx) => (
+                                        {(localizedProject?.features ?? project.features ?? []).map((feature, idx) => (
                                             <motion.div
                                                 key={idx}
                                                 className="flex items-start gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors"

@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { RAMS_PROJECTS } from "@/lib/data/projects";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { useLanguage, getLocalizedStatus } from "@/lib/i18n";
+import { useLanguage, getLocalizedStatus, isProjectUnderConstruction } from "@/lib/i18n";
 
 interface MediaStats {
   projectId: string;
@@ -297,7 +297,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       {/* Status Badge */}
                       <div
                         className={`mt-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                          project.status === "Строится" || project.status.includes("очередь")
+                          isProjectUnderConstruction(project.status)
                             ? "bg-yellow-500/20 text-yellow-400"
                             : "bg-green-500/20 text-green-400"
                         }`}

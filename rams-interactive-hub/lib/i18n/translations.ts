@@ -435,6 +435,112 @@ export const translations = {
     tr: "İngilizce",
     en: "English",
   },
+
+  // Info Modal - additional keys
+  completionYear: {
+    ru: "Год сдачи",
+    kk: "Тапсыру жылы",
+    tr: "Teslim Yılı",
+    en: "Completion Year",
+  },
+  ceilings: {
+    ru: "Потолки",
+    kk: "Төбелер",
+    tr: "Tavanlar",
+    en: "Ceilings",
+  },
+  advantages: {
+    ru: "Преимущества",
+    kk: "Артықшылықтар",
+    tr: "Avantajlar",
+    en: "Advantages",
+  },
+  watchPresentation: {
+    ru: "Смотреть презентацию",
+    kk: "Презентацияны көру",
+    tr: "Sunumu İzle",
+    en: "Watch Presentation",
+  },
+
+  // Screensaver
+  tapToContinue: {
+    ru: "Нажмите для продолжения",
+    kk: "Жалғастыру үшін басыңыз",
+    tr: "Devam etmek için dokunun",
+    en: "Tap to continue",
+  },
+
+  // Error Boundary
+  somethingWentWrong: {
+    ru: "Что-то пошло не так",
+    kk: "Бірдеңе дұрыс болмады",
+    tr: "Bir şeyler yanlış gitti",
+    en: "Something went wrong",
+  },
+  systemErrorMessage: {
+    ru: "Произошла ошибка в работе интерактивного стенда. Система автоматически перезагрузится через 30 секунд.",
+    kk: "Интерактивті стендтің жұмысында қате орын алды. Жүйе 30 секундтан кейін автоматты түрде қайта жүктеледі.",
+    tr: "Etkileşimli stantta bir hata oluştu. Sistem 30 saniye içinde otomatik olarak yeniden başlayacak.",
+    en: "An error occurred in the interactive stand. The system will automatically restart in 30 seconds.",
+  },
+  reloadSystem: {
+    ru: "Перезагрузить систему",
+    kk: "Жүйені қайта жүктеу",
+    tr: "Sistemi Yeniden Başlat",
+    en: "Reload System",
+  },
+
+  // Admin page additional keys
+  projectsCount: {
+    ru: "проектов",
+    kk: "жоба",
+    tr: "proje",
+    en: "projects",
+  },
+  hasLogo: {
+    ru: "Есть лого",
+    kk: "Логосы бар",
+    tr: "Logo var",
+    en: "Has logo",
+  },
+  noLogo: {
+    ru: "Нет лого",
+    kk: "Логосы жоқ",
+    tr: "Logo yok",
+    en: "No logo",
+  },
+  openSettingsShortcut: {
+    ru: "Нажмите Ctrl+Shift+A чтобы открыть эту страницу",
+    kk: "Бұл бетті ашу үшін Ctrl+Shift+A басыңыз",
+    tr: "Bu sayfayı açmak için Ctrl+Shift+A'ya basın",
+    en: "Press Ctrl+Shift+A to open this page",
+  },
+  escapeToReturn: {
+    ru: "Нажмите Escape чтобы вернуться",
+    kk: "Қайту үшін Escape басыңыз",
+    tr: "Geri dönmek için Escape'e basın",
+    en: "Press Escape to return",
+  },
+  selectProjectsDescription: {
+    ru: "Выберите проекты для отображения в приложении",
+    kk: "Қолданбада көрсету үшін жобаларды таңдаңыз",
+    tr: "Uygulamada görüntülenecek projeleri seçin",
+    en: "Select projects to display in the application",
+  },
+
+  // Short labels for project cards
+  floorsShort: {
+    ru: "эт.",
+    kk: "қаб.",
+    tr: "kat",
+    en: "fl.",
+  },
+  unitsShort: {
+    ru: "кв.",
+    kk: "пәт.",
+    tr: "dai.",
+    en: "apt.",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

@@ -9,6 +9,15 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { easings } from "@/lib/animations";
+import { useLanguage, Language } from "@/lib/i18n";
+
+// Locale mapping for date/time formatting
+const localeMap: Record<Language, string> = {
+  ru: "ru-RU",
+  kk: "kk-KZ",
+  tr: "tr-TR",
+  en: "en-US",
+};
 
 export interface ScreensaverProps {
   /** Idle timeout in milliseconds (default: 5 minutes) */
@@ -27,9 +36,11 @@ export const Screensaver: React.FC<ScreensaverProps> = ({
   const [isActive, setIsActive] = React.useState(false);
   const [currentTime, setCurrentTime] = React.useState(new Date());
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const { language, t } = useLanguage();
 
   // Use direct path for brand assets
   const logoSrc = "/images/brand/rams-logo.png";
+  const locale = localeMap[language];
 
   // Update time every minute
   React.useEffect(() => {
@@ -108,13 +119,13 @@ export const Screensaver: React.FC<ScreensaverProps> = ({
     }, idleTimeout);
   };
 
-  // Format time
-  const formattedTime = currentTime.toLocaleTimeString("ru-RU", {
+  // Format time with dynamic locale
+  const formattedTime = currentTime.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
 
-  const formattedDate = currentTime.toLocaleDateString("ru-RU", {
+  const formattedDate = currentTime.toLocaleDateString(locale, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -246,7 +257,7 @@ export const Screensaver: React.FC<ScreensaverProps> = ({
             }}
           >
             <span className="text-white/30 text-sm tracking-widest uppercase">
-              Нажмите для продолжения
+              {t("tapToContinue")}
             </span>
           </motion.div>
         </motion.div>

@@ -9,6 +9,7 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import { RAMS_PROJECTS } from "@/lib/data/projects";
 import { useRouter } from "next/navigation";
+import { useLanguage, getLocalizedStatus, isProjectUnderConstruction } from "@/lib/i18n";
 
 interface MediaStats {
   projectId: string;
@@ -20,6 +21,7 @@ interface MediaStats {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { language, t } = useLanguage();
   const [visibility, setVisibility] = React.useState<Record<string, boolean>>({});
   const [saved, setSaved] = React.useState(false);
   const [mediaStats, setMediaStats] = React.useState<Record<string, MediaStats>>({});
@@ -136,20 +138,20 @@ export default function AdminPage() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Настройки проектов</h1>
+            <h1 className="text-3xl font-bold">{t("projectSettings")}</h1>
             <p className="text-gray-400 mt-1">
-              Выберите проекты для отображения в приложении
+              {t("selectProjectsDescription")}
             </p>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-gray-400">
-              {visibleCount} из {RAMS_PROJECTS.length} проектов
+              {visibleCount} {t("of")} {RAMS_PROJECTS.length} {t("projectsCount")}
             </span>
             <button
               onClick={goBack}
               className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
             >
-              Закрыть
+              {t("close")}
             </button>
           </div>
         </div>
@@ -158,19 +160,19 @@ export default function AdminPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-800 rounded-xl p-4">
             <div className="text-3xl font-bold text-blue-400">{totalVideos}</div>
-            <div className="text-sm text-gray-400">Видео</div>
+            <div className="text-sm text-gray-400">{t("videos")}</div>
           </div>
           <div className="bg-gray-800 rounded-xl p-4">
             <div className="text-3xl font-bold text-green-400">{totalPhotos}</div>
-            <div className="text-sm text-gray-400">Фото</div>
+            <div className="text-sm text-gray-400">{t("photos")}</div>
           </div>
           <div className="bg-gray-800 rounded-xl p-4">
             <div className="text-3xl font-bold text-purple-400">{projectsWithLogo}</div>
-            <div className="text-sm text-gray-400">С логотипом</div>
+            <div className="text-sm text-gray-400">{t("withLogo")}</div>
           </div>
           <div className="bg-gray-800 rounded-xl p-4">
             <div className="text-3xl font-bold text-primary">{projectsWithMedia}</div>
-            <div className="text-sm text-gray-400">С медиа</div>
+            <div className="text-sm text-gray-400">{t("withMedia")}</div>
           </div>
         </div>
 
@@ -180,19 +182,19 @@ export default function AdminPage() {
             onClick={selectAll}
             className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
           >
-            Выбрать все
+            {t("selectAll")}
           </button>
           <button
             onClick={deselectAll}
             className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors"
           >
-            Снять все
+            {t("deselectAll")}
           </button>
           <button
             onClick={selectWithMedia}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
           >
-            Только с медиа
+            {t("onlyWithMedia")}
           </button>
           <button
             onClick={saveSettings}
@@ -202,7 +204,7 @@ export default function AdminPage() {
                 : "bg-primary hover:bg-primary/90 text-white"
             }`}
           >
-            {saved ? "Сохранено!" : "Сохранить"}
+            {saved ? t("saved") : t("save")}
           </button>
         </div>
 
@@ -268,12 +270,12 @@ export default function AdminPage() {
                 {/* Status Badge */}
                 <div
                   className={`mt-2 inline-block px-2 py-1 rounded text-xs font-medium ${
-                    project.status === "Строится" || project.status.includes("очередь")
+                    isProjectUnderConstruction(project.status)
                       ? "bg-yellow-500/20 text-yellow-400"
                       : "bg-green-500/20 text-green-400"
                   }`}
                 >
-                  {project.status}
+                  {getLocalizedStatus(project.status, language)}
                 </div>
 
                 {/* Media Stats */}
@@ -296,7 +298,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Logo indicator */}
-                    <div className={`flex items-center gap-1 ${hasLogo ? 'text-purple-400' : 'text-gray-600'}`} title={hasLogo ? 'Есть лого' : 'Нет лого'}>
+                    <div className={`flex items-center gap-1 ${hasLogo ? 'text-purple-400' : 'text-gray-600'}`} title={hasLogo ? t("hasLogo") : t("noLogo")}>
                       <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm6 6H7v2h6v-2z" clipRule="evenodd" />
                       </svg>
@@ -307,7 +309,7 @@ export default function AdminPage() {
                   {/* Total media badge */}
                   {totalMedia === 0 && (
                     <div className="mt-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded">
-                      Нет медиа
+                      {t("noMedia")}
                     </div>
                   )}
                 </div>
@@ -318,8 +320,8 @@ export default function AdminPage() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-500 text-sm">
-          <p>Нажмите Ctrl+Shift+A чтобы открыть эту страницу</p>
-          <p>Нажмите Escape чтобы вернуться</p>
+          <p>{t("openSettingsShortcut")}</p>
+          <p>{t("escapeToReturn")}</p>
         </div>
       </div>
     </div>

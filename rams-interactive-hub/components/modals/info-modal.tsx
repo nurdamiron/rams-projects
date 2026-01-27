@@ -12,6 +12,7 @@ import { Project } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { getMediaUrl } from "@/lib/media-utils";
+import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass, isProjectUnderConstruction } from "@/lib/i18n";
 
 export interface InfoModalProps {
   isOpen: boolean;
@@ -27,10 +28,15 @@ export const InfoModal: React.FC<InfoModalProps> = ({
   theme = "dark",
 }) => {
   const isDark = theme === "dark";
+  const { language, t } = useLanguage();
 
   if (!project) return null;
 
   const logoSource = getMediaUrl(project.logo || project.image);
+  const localizedProject = getLocalizedProject(project.id, language);
+  const localizedStatus = getLocalizedStatus(project.status, language);
+  const localizedClass = getLocalizedClass(project.info.class, language);
+  const isBuilding = isProjectUnderConstruction(project.status);
 
   return (
     <AnimatePresence>
@@ -93,11 +99,11 @@ export const InfoModal: React.FC<InfoModalProps> = ({
               <div className="mt-5 flex items-center gap-3 flex-wrap">
                 <span className={cn(
                   "px-4 py-1.5 rounded-full text-sm font-semibold",
-                  project.status === "Строится" || project.status.includes("очередь")
+                  isBuilding
                     ? "bg-amber-500/20 text-amber-400"
                     : "bg-emerald-500/20 text-emerald-400"
                 )}>
-                  {project.status}
+                  {localizedStatus}
                 </span>
                 {project.statusBadge && (
                   <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-primary/20 text-primary">
@@ -105,7 +111,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                   </span>
                 )}
                 <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 text-white/70">
-                  {project.info.class}
+                  {localizedClass}
                 </span>
               </div>
             </div>
@@ -120,24 +126,24 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                   <div className="text-xl font-bold text-white">
                     {project.info.deadline}
                   </div>
-                  <div className="text-xs text-white/50 mt-1">Год сдачи</div>
+                  <div className="text-xs text-white/50 mt-1">{t("completionYear")}</div>
                 </div>
                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                   <Icon name="layers" className="text-primary mb-2" size="sm" />
                   <div className="text-xl font-bold text-white">{project.info.floors}</div>
-                  <div className="text-xs text-white/50 mt-1">Этажей</div>
+                  <div className="text-xs text-white/50 mt-1">{t("floors")}</div>
                 </div>
                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                   <Icon name="apartment" className="text-primary mb-2" size="sm" />
                   <div className="text-xl font-bold text-white">
                     {project.info.units > 0 ? project.info.units : "—"}
                   </div>
-                  <div className="text-xs text-white/50 mt-1">Квартир</div>
+                  <div className="text-xs text-white/50 mt-1">{t("apartments")}</div>
                 </div>
                 <div className="p-4 rounded-2xl bg-white/5 hover:bg-white/8 transition-colors">
                   <Icon name="straighten" className="text-primary mb-2" size="sm" />
                   <div className="text-xl font-bold text-white">{project.info.ceilingHeight}</div>
-                  <div className="text-xs text-white/50 mt-1">Потолки</div>
+                  <div className="text-xs text-white/50 mt-1">{t("ceilings")}</div>
                 </div>
               </div>
 
@@ -156,10 +162,10 @@ export const InfoModal: React.FC<InfoModalProps> = ({
               <section>
                 <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                   <Icon name="article" size="sm" />
-                  О проекте
+                  {t("aboutProject")}
                 </h3>
                 <p className="text-base leading-relaxed text-white/80">
-                  {project.description}
+                  {localizedProject?.description || project.description}
                 </p>
                 {project.concept && (
                   <div className="mt-4 p-5 rounded-2xl bg-primary/10">
@@ -175,10 +181,10 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                 <section>
                   <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                     <Icon name="stars" size="sm" />
-                    Преимущества ({project.features.length})
+                    {t("advantages")} ({project.features.length})
                   </h3>
                   <div className="grid grid-cols-1 gap-2">
-                    {project.features.map((feature, index) => (
+                    {(localizedProject?.features || project.features).map((feature, index) => (
                       <motion.div
                         key={index}
                         className="flex items-start gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors"
@@ -207,7 +213,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                   onClick={() => window.open(project.presentationUrl, '_blank')}
                 >
                   <Icon name="play_circle" className="mr-2" />
-                  Смотреть презентацию
+                  {t("watchPresentation")}
                 </Button>
               ) : (
                 <Button
@@ -215,7 +221,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                   onClick={onClose}
                   className="text-white/60 hover:text-white hover:bg-white/10"
                 >
-                  Закрыть
+                  {t("close")}
                 </Button>
               )}
             </div>

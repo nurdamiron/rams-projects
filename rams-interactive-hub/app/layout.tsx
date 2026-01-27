@@ -5,7 +5,7 @@ import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "RAMS Interactive Hub | Premium Real Estate Presentation",
-  description: "Интерактивная презентация проектов премиальной недвижимости RAMS Global",
+  description: "Interactive presentation of premium real estate projects by RAMS Global. Explore our residential, commercial and hospitality developments.",
 };
 
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         {/* Preconnect FIRST for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -12,7 +12,7 @@ import { Project } from "@/lib/types";
 import { staggerItem, easings } from "@/lib/animations";
 import { hardwareService } from "@/lib/hardware-service";
 import { getMediaUrl } from "@/lib/media-utils";
-import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass } from "@/lib/i18n";
+import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass, isProjectUnderConstruction } from "@/lib/i18n";
 
 export interface ProjectCardProps {
   project: Project;
@@ -31,16 +31,12 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const isDark = theme === "dark";
   const logoSource = getMediaUrl(project.logo || project.image);
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
 
   // Get localized project data
   const localizedProject = getLocalizedProject(project.id, language);
   const localizedStatus = getLocalizedStatus(project.status, language);
   const localizedClass = getLocalizedClass(project.info.class, language);
-
-  // Localized labels for stats
-  const floorsLabel: Record<string, string> = { ru: "эт.", kk: "қаб.", tr: "kat", en: "fl." };
-  const unitsLabel: Record<string, string> = { ru: "кв.", kk: "пәт.", tr: "dai.", en: "apt." };
 
   // Check if project has only video (no real images)
   const hasOnlyVideo = project.image?.includes("placeholder") &&
@@ -62,7 +58,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   }, [hasOnlyVideo]);
 
   // Status color
-  const isBuilding = project.status === "Строится" || project.status.includes("очередь");
+  const isBuilding = isProjectUnderConstruction(project.status);
 
   return (
     <motion.div
@@ -198,12 +194,12 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-1 h-1 rounded-full bg-primary" />
-                  {project.info.floors} {floorsLabel[language]}
+                  {project.info.floors} {t("floorsShort")}
                 </span>
                 {project.info.units > 0 && (
                   <span className="flex items-center gap-1">
                     <span className="w-1 h-1 rounded-full bg-primary" />
-                    {project.info.units} {unitsLabel[language]}
+                    {project.info.units} {t("unitsShort")}
                   </span>
                 )}
               </motion.div>
