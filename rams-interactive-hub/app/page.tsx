@@ -6,6 +6,7 @@
 "use client";
 
 import * as React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Screensaver } from "@/components/screensaver";
 import { ProjectGallery } from "@/components/gallery";
 import { ProjectHub } from "@/components/hub/project-hub";
@@ -132,54 +133,68 @@ export default function Home() {
 
   return (
     <div className="relative w-full min-h-screen overflow-hidden">
-      {/* Gallery / Main Menu */}
-      {currentScreen === "gallery" && (
-        <>
-          <ProjectGallery
-            projects={visibleProjects}
-            theme={theme}
-            onProjectSelect={handleProjectSelect}
-            onAboutCompany={() => setIsAboutCompanyOpen(true)}
-            connectionStatus="online"
-          />
+      <AnimatePresence mode="wait">
+        {/* Gallery / Main Menu */}
+        {currentScreen === "gallery" && (
+          <motion.div
+            key="gallery"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.4, ease: "easeInOut" }}
+          >
+            <ProjectGallery
+              projects={visibleProjects}
+              theme={theme}
+              onProjectSelect={handleProjectSelect}
+              onAboutCompany={() => setIsAboutCompanyOpen(true)}
+              connectionStatus="online"
+            />
 
-          {/* About Company Modal */}
-          <AboutCompany
-            isOpen={isAboutCompanyOpen}
-            onClose={() => setIsAboutCompanyOpen(false)}
-            theme={theme}
-          />
-        </>
-      )}
+            {/* About Company Modal */}
+            <AboutCompany
+              isOpen={isAboutCompanyOpen}
+              onClose={() => setIsAboutCompanyOpen(false)}
+              theme={theme}
+            />
+          </motion.div>
+        )}
 
-      {/* Project Hub */}
-      {currentScreen === "hub" && selectedProject && (
-        <>
-          <ProjectHub
-            project={selectedProject}
-            theme={theme}
-            onBack={handleBackToGallery}
-            onVideoPlay={handleVideoPlay}
-            onInfoOpen={handleInfoOpen}
-          />
+        {/* Project Hub */}
+        {currentScreen === "hub" && selectedProject && (
+          <motion.div
+            key="hub"
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
+            <ProjectHub
+              project={selectedProject}
+              theme={theme}
+              onBack={handleBackToGallery}
+              onVideoPlay={handleVideoPlay}
+              onInfoOpen={handleInfoOpen}
+            />
 
-          {/* Video Player Modal */}
-          <FullscreenVideo
-            isOpen={isVideoOpen}
-            videoSrc={activeVideoScene?.video}
-            posterSrc={activeVideoScene?.image}
-            onClose={handleVideoClose}
-          />
+            {/* Video Player Modal */}
+            <FullscreenVideo
+              isOpen={isVideoOpen}
+              videoSrc={activeVideoScene?.video}
+              posterSrc={activeVideoScene?.image}
+              onClose={handleVideoClose}
+            />
 
-          {/* Info Modal */}
-          <InfoModal
-            isOpen={isInfoModalOpen}
-            project={selectedProject}
-            onClose={handleInfoClose}
-            theme={theme}
-          />
-        </>
-      )}
+            {/* Info Modal */}
+            <InfoModal
+              isOpen={isInfoModalOpen}
+              project={selectedProject}
+              onClose={handleInfoClose}
+              theme={theme}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Admin Modal */}
       <AdminModal

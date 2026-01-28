@@ -19,6 +19,18 @@ export const translations = {
     tr: "Geri",
     en: "Back",
   },
+  backToProjects: {
+    ru: "К проектам",
+    kk: "Жобаларға",
+    tr: "Projelere",
+    en: "Back to projects",
+  },
+  class: {
+    ru: "Класс",
+    kk: "Класс",
+    tr: "Sınıf",
+    en: "Class",
+  },
   save: {
     ru: "Сохранить",
     kk: "Сақтау",
@@ -540,6 +552,12 @@ export const translations = {
     kk: "пәт.",
     tr: "dai.",
     en: "apt.",
+  },
+  projectsShort: {
+    ru: "проекта",
+    kk: "жоба",
+    tr: "proje",
+    en: "projects",
   },
 } as const;
 

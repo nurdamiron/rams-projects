@@ -1,6 +1,6 @@
 /**
  * Project Gallery Component
- * Main menu / Project showcase screen
+ * Main menu / Project showcase screen with 15 cards (some multi-logo)
  */
 
 "use client";
@@ -10,10 +10,10 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Project } from "@/lib/types";
 import { ProjectCard } from "./project-card";
-import { Button } from "@/components/ui/button";
 import { getMediaUrl } from "@/lib/media-utils";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { useLanguage } from "@/lib/i18n";
+import { GALLERY_CARDS, getProjectsForCard } from "@/lib/data/gallery-config";
 
 import { staggerContainer, fadeInUp, easings } from "@/lib/animations";
 
@@ -39,11 +39,15 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
   const logoSrc = "/images/brand/rams-logo.png";
 
   return (
-    <div
+    <motion.div
       className={cn(
-        "min-h-screen w-full relative overflow-hidden",
+        "h-screen w-full relative overflow-hidden flex flex-col",
         isDark ? "bg-background-dark" : "bg-white"
       )}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
     >
       {/* Background Pattern */}
       {!isDark && (
@@ -51,27 +55,27 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
       )}
 
       {/* Content Container */}
-      <div className="relative z-10">
-        {/* Header with RAMS Logo */}
+      <div className="relative z-10 flex flex-col h-full">
+        {/* Header with RAMS Logo - Compact */}
         <motion.header
-          className="pt-8 pb-12 px-6 relative z-50"
+          className="py-4 px-6 relative z-50 shrink-0"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
         >
-          <div className="max-w-7xl mx-auto flex flex-col items-center relative">
+          <div className="max-w-7xl mx-auto flex items-center justify-center relative">
             {/* RAMS Logo centered */}
             <motion.img
               src={logoSrc}
               alt="RAMS Global"
-              className="w-[300px] h-auto mb-8"
+              className="h-12 w-auto"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, delay: 0.1 }}
             />
 
-            {/* Right side buttons */}
-            <div className="absolute right-0 top-0 flex items-center gap-3 z-50">
+            {/* Right side buttons - Icons only */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 z-50">
               {/* Language Switcher */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -81,22 +85,25 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                 <LanguageSwitcher theme={theme} />
               </motion.div>
 
-              {/* About Company Button */}
+              {/* About Company Button - Icon */}
               <motion.button
                 onClick={onAboutCompany}
                 className={cn(
-                  "px-6 py-3 rounded-full font-semibold tracking-wider transition-all shadow-lg",
+                  "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg",
                   isDark
-                    ? "bg-primary text-white hover:bg-primary/90 border-2 border-primary hover:shadow-primary/50"
-                    : "bg-primary-dark text-white hover:bg-primary-dark/90 border-2 border-primary-dark hover:shadow-primary-dark/50"
+                    ? "bg-primary text-white hover:bg-primary/90"
+                    : "bg-primary-dark text-white hover:bg-primary-dark/90"
                 )}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6, delay: 0.15 }}
-                whileHover={{ scale: 1.05 }}
+                whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
+                title={t("aboutCompany")}
               >
-                {t("aboutCompany")}
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </motion.button>
 
               {/* Theme Toggle Button */}
@@ -111,7 +118,7 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                whileHover={{ scale: 1.05, rotate: 180 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
                 {isDark ? (
@@ -128,47 +135,60 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
           </div>
         </motion.header>
 
-        {/* Projects Grid */}
-        <main className="px-6 md:px-12 pb-24">
+        {/* Projects Grid - 5x3 for 15 cards */}
+        <main className="px-4 md:px-8 pb-4 flex-1">
           <motion.div
-            className="max-w-[1600px] mx-auto"
+            className="max-w-[1800px] mx-auto h-full"
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
           >
-            <div className="grid grid-cols-3 gap-6">
-              {projects.map((project, index) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  theme={theme}
-                  onClick={onProjectSelect}
-                  index={index}
-                />
-              ))}
+            <div className="grid grid-cols-5 grid-rows-3 gap-4 h-full">
+              {GALLERY_CARDS.map((card, index) => {
+                const cardProjects = getProjectsForCard(card);
+                return (
+                  <ProjectCard
+                    key={card.id}
+                    galleryCard={card}
+                    projects={cardProjects as Project[]}
+                    theme={theme}
+                    onClick={onProjectSelect}
+                    index={index}
+                  />
+                );
+              })}
             </div>
           </motion.div>
         </main>
-
       </div>
 
       {/* Decorative Elements */}
-      <div
+      <motion.div
         className={cn(
           "fixed top-0 left-0 w-1/3 h-1/3 blur-3xl opacity-10 pointer-events-none",
           isDark
             ? "bg-gradient-to-br from-primary to-transparent"
             : "bg-gradient-to-br from-primary-dark to-transparent"
         )}
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.1, 0.15, 0.1],
+        }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
-      <div
+      <motion.div
         className={cn(
           "fixed bottom-0 right-0 w-1/3 h-1/3 blur-3xl opacity-10 pointer-events-none",
           isDark
             ? "bg-gradient-to-tl from-primary to-transparent"
             : "bg-gradient-to-tl from-primary-dark to-transparent"
         )}
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.1, 0.15, 0.1],
+        }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 4 }}
       />
-    </div>
+    </motion.div>
   );
 };

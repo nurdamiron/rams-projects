@@ -37,32 +37,19 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 
   return (
     <div ref={containerRef} className={cn("relative z-50", className)}>
-      {/* Current Language Button */}
+      {/* Current Language Button - Icon only */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all shadow-lg",
+          "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg",
           isDark
             ? "bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 text-white"
             : "bg-gray-900 border border-gray-800 hover:bg-gray-800 text-white"
         )}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
       >
-        <span className="text-lg">{languageFlags[language]}</span>
-        <span className="text-sm font-semibold tracking-wide">
-          {languageNames[language]}
-        </span>
-        <motion.svg
-          className="w-4 h-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </motion.svg>
+        <span className="text-xl">{languageFlags[language]}</span>
       </motion.button>
 
       {/* Dropdown */}
