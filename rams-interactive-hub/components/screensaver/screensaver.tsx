@@ -38,8 +38,8 @@ export const Screensaver: React.FC<ScreensaverProps> = ({
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const { language, t } = useLanguage();
 
-  // Use direct path for brand assets
-  const logoSrc = "/images/brand/rams-logo.png";
+  // Use official RAMS Global logo from web
+  const logoSrc = "https://rams-global.com/favicon.svg";
   const locale = localeMap[language];
 
   // Update time every minute

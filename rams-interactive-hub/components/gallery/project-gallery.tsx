@@ -15,7 +15,9 @@ import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { useLanguage } from "@/lib/i18n";
 import { GALLERY_CARDS, getProjectsForCard } from "@/lib/data/gallery-config";
 
-import { staggerContainer, fadeInUp, easings } from "@/lib/animations";
+import { Icon } from "@/components/ui/icon";
+import { useTheme } from "@/lib/theme-context";
+import { staggerContainer, iconSpin } from "@/lib/animations";
 
 export interface ProjectGalleryProps {
   projects: Project[];
@@ -33,12 +35,11 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
   connectionStatus = "online",
 }) => {
   const isDark = theme === "dark";
-  const { toggleTheme } = require("@/lib/theme-context").useTheme();
-  const { t } = useLanguage();
-  // Use direct path for brand assets (always available in public folder)
-  const logoSrc = "/images/brand/rams-logo.png";
+  const { toggleTheme } = useTheme();
+    const { t } = useLanguage();
+    const logoSrc = "/images/brand/rams-logo.png";
 
-  return (
+    return (
     <motion.div
       className={cn(
         "h-screen w-full relative overflow-hidden flex flex-col",
@@ -85,26 +86,36 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                 <LanguageSwitcher theme={theme} />
               </motion.div>
 
-              {/* About Company Button - Icon */}
-              <motion.button
-                onClick={onAboutCompany}
-                className={cn(
-                  "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg",
-                  isDark
-                    ? "bg-primary text-white hover:bg-primary/90"
-                    : "bg-primary-dark text-white hover:bg-primary-dark/90"
-                )}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, delay: 0.15 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                title={t("aboutCompany")}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </motion.button>
+                {/* About Company Button - Icon */}
+                <motion.button
+                  onClick={onAboutCompany}
+                  className={cn(
+                    "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg",
+                    isDark
+                      ? "bg-primary text-white hover:bg-primary/90"
+                      : "bg-primary-dark text-white hover:bg-primary-dark/90"
+                  )}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ 
+                    opacity: 1, 
+                    scale: 1,
+                    boxShadow: [
+                      "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                      "0 0 20px rgba(200, 161, 97, 0.4)",
+                      "0 10px 15px -3px rgba(0, 0, 0, 0.1)"
+                    ]
+                  }}
+                  transition={{ 
+                    opacity: { duration: 0.6, delay: 0.15 },
+                    scale: { duration: 0.6, delay: 0.15 },
+                    boxShadow: { duration: 3, repeat: Infinity, ease: "easeInOut" }
+                  }}
+                  whileHover={{ scale: 1.1, boxShadow: "0 0 30px rgba(200, 161, 97, 0.6)" }}
+                  whileTap={{ scale: 0.95 }}
+                    title={t("aboutCompany")}
+                  >
+                    <Icon name="info" size="lg" />
+                  </motion.button>
 
               {/* Theme Toggle Button */}
               <motion.button
@@ -122,13 +133,9 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                 whileTap={{ scale: 0.95 }}
               >
                 {isDark ? (
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
+                  <Icon name="light_mode" className="text-white" />
                 ) : (
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
+                  <Icon name="dark_mode" className="text-white" />
                 )}
               </motion.button>
             </div>

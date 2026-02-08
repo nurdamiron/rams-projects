@@ -31,9 +31,9 @@ export function getMediaUrl(path: string | undefined): string {
 
     if (isElectron) {
         // In Electron, use the custom media protocol
+        // Triple slash: media:///path (no hostname)
         const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-        // Encode path for URL (handles cyrillic and special chars)
-        return `media://${encodeURI(cleanPath)}`;
+        return `media:///${encodeURI(cleanPath)}`;
     }
 
     // In standard web/dev environment, encode the path for URL compatibility

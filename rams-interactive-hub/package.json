@@ -7,36 +7,43 @@
   "main": "electron/main.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nurdamiron/rams-projects.git"
+    "url": "https://github.com/nurdamiron/rams-interactive-hub.git"
   },
-  "author": "RAMS Global",
-  "description": "Interactive presentation hub for RAMS real estate projects",
   "scripts": {
-    "dev": "TURBOPACK=0 next dev",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
+    "postbuild": "rm -rf out/projects",
     "electron:build": "next build && electron-builder",
+    "electron:build:win": "next build && electron-builder --win",
+    "electron:build:mac": "next build && electron-builder --mac",
+    "electron:build:all": "next build && electron-builder --win --mac",
     "lint": "eslint"
   },
   "build": {
     "appId": "com.rams.interactivehub",
     "productName": "RAMS Interactive Hub",
+    "copyright": "Copyright © 2026 RAMS Global",
     "files": [
       "electron/**/*",
-      ".next/**/*",
+      "out/**/*",
       "public/*.svg",
       "public/*.png",
       "public/images/brand/**/*",
       "public/fonts/**/*",
       "!public/projects/**/*",
-      "package.json",
-      "node_modules/next/**/*"
+      "package.json"
     ],
     "asarUnpack": [
-      "**/*.node",
-      ".next/**/*",
-      "node_modules/next/**/*"
+      "**/*.node"
+    ],
+    "extraResources": [
+      {
+        "from": "public/projects/",
+        "to": "media/projects/",
+        "filter": ["**/*"]
+      }
     ],
     "directories": {
       "buildResources": "assets",
@@ -47,32 +54,33 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "target": "dir",
+          "arch": ["x64"]
         }
       ],
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "RAMS Interactive Hub",
-      "perMachine": true,
-      "runAfterFinish": true,
-      "deleteAppDataOnUninstall": true
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ],
+      "icon": "public/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
     },
-    "portable": {
-      "artifactName": "RAMS-Interactive-Hub-Portable.exe"
+    "dmg": {
+      "title": "${productName} ${version}",
+      "icon": "public/icon.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     }
   },
   "dependencies": {
@@ -84,16 +92,13 @@
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "serialport": "^13.0.0",
-    "tailwind-merge": "^3.4.0",
-    "xlsx": "^0.18.5"
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/serialport": "^8.0.5",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^39.2.7",

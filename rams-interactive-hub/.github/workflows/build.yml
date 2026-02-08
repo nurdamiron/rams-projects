@@ -1,0 +1,67 @@
+name: Build Electron App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Remove copied media from out
+        run: |
+          if (Test-Path "out/projects") { Remove-Item -Recurse -Force "out/projects" }
+        shell: pwsh
+
+      - name: Build Electron (Windows dir)
+        run: npx electron-builder --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create media folder placeholder
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/win-unpacked/resources/media/projects"
+          Set-Content -Path "dist/win-unpacked/resources/media/README.txt" -Value @"
+          RAMS Interactive Hub - Media Files
+          ====================================
+          Place your project media files here:
+
+          media/projects/
+            09-rams-garden-almaty/
+              images/
+                logo/logo.svg
+                main.jpg
+                scenes/01.jpg, 02.jpg...
+              videos/main.mp4
+            11-rams-signature/
+              ...
+
+          Each project folder should match the project ID.
+          "@
+        shell: pwsh
+
+      - name: Zip win-unpacked
+        run: Compress-Archive -Path "dist/win-unpacked/*" -DestinationPath "dist/RAMS-Interactive-Hub-win-x64.zip"
+        shell: pwsh
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAMS-Interactive-Hub-Windows
+          path: dist/RAMS-Interactive-Hub-win-x64.zip
+          retention-days: 30

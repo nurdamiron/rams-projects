@@ -195,7 +195,7 @@ export const InfoOverlay: React.FC<InfoOverlayProps> = ({
                             {project.concept && (
                                 <section className="p-5 rounded-2xl bg-primary/10">
                                     <p className="text-primary italic text-lg leading-relaxed">
-                                        "{project.concept}"
+                                        &quot;{project.concept}&quot;
                                     </p>
                                 </section>
                             )}

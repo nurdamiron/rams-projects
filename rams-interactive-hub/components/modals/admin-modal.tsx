@@ -1,6 +1,5 @@
 /**
- * Admin Modal - Project Visibility Settings
- * Modal version for kiosk mode
+ * Admin Modal - Project Visibility + Diagnostics
  * Access via Ctrl+Shift+A
  */
 
@@ -21,6 +20,25 @@ interface MediaStats {
   hasMainImage: boolean;
 }
 
+interface DiagnosticCandidate {
+  label: string;
+  path: string;
+  projectsExists: boolean;
+  sampleFiles: string[];
+}
+
+interface DiagnosticInfo {
+  platform: string;
+  isPackaged: boolean;
+  appPath: string;
+  exePath: string;
+  exeDir: string;
+  resourcesPath: string;
+  mediaRoot: string;
+  mediaRootExists: boolean;
+  candidates: DiagnosticCandidate[];
+}
+
 interface AdminModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,39 +54,74 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [saved, setSaved] = React.useState(false);
   const [mediaStats, setMediaStats] = React.useState<Record<string, MediaStats>>({});
   const [loadingStats, setLoadingStats] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState<"projects" | "diagnostics">("projects");
+  const [diagnostics, setDiagnostics] = React.useState<DiagnosticInfo | null>(null);
   const { t, language } = useLanguage();
 
-  // Load real media stats from API
+  const isElectron = typeof window !== "undefined" && (window as any).electron?.isElectron;
+
+  // Load media stats (via Electron IPC or fallback)
   React.useEffect(() => {
     if (!isOpen) return;
+    setLoadingStats(true);
 
-    fetch("/api/media-stats")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
+    const loadStats = async () => {
+      try {
+        if (isElectron && (window as any).electron?.getMediaStats) {
+          const stats = await (window as any).electron.getMediaStats();
           const statsMap: Record<string, MediaStats> = {};
-          data.stats.forEach((s: MediaStats) => {
-            statsMap[s.projectId] = s;
-          });
+          (stats || []).forEach((s: MediaStats) => { statsMap[s.projectId] = s; });
           setMediaStats(statsMap);
         }
-      })
-      .catch(console.error)
-      .finally(() => setLoadingStats(false));
-  }, [isOpen]);
+      } catch (e) {
+        console.error("Failed to load media stats:", e);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    loadStats();
+  }, [isOpen, isElectron]);
+
+  // Load diagnostics
+  React.useEffect(() => {
+    if (!isOpen || activeTab !== "diagnostics") return;
+
+    const loadDiag = async () => {
+      try {
+        if (isElectron && (window as any).electron?.getDiagnostics) {
+          const diag = await (window as any).electron.getDiagnostics();
+          setDiagnostics(diag);
+        } else {
+          setDiagnostics({
+            platform: "browser",
+            isPackaged: false,
+            appPath: window.location.href,
+            exePath: "-",
+            exeDir: "-",
+            resourcesPath: "-",
+            mediaRoot: "/public",
+            mediaRootExists: true,
+            candidates: [],
+          });
+        }
+      } catch (e) {
+        console.error("Failed to load diagnostics:", e);
+      }
+    };
+
+    loadDiag();
+  }, [isOpen, activeTab, isElectron]);
 
   // Load saved visibility from localStorage
   React.useEffect(() => {
     if (!isOpen) return;
-
     const savedVisibility = localStorage.getItem("rams-project-visibility");
     if (savedVisibility) {
       setVisibility(JSON.parse(savedVisibility));
     } else {
       const defaultVisibility: Record<string, boolean> = {};
-      RAMS_PROJECTS.forEach((p) => {
-        defaultVisibility[p.id] = true;
-      });
+      RAMS_PROJECTS.forEach((p) => { defaultVisibility[p.id] = true; });
       setVisibility(defaultVisibility);
     }
   }, [isOpen]);
@@ -76,58 +129,40 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Escape key to close
   React.useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Toggle project visibility
   const toggleProject = (id: string) => {
-    setVisibility((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+    setVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
     setSaved(false);
   };
 
-  // Select all
   const selectAll = () => {
-    const newVisibility: Record<string, boolean> = {};
-    RAMS_PROJECTS.forEach((p) => {
-      newVisibility[p.id] = true;
-    });
-    setVisibility(newVisibility);
+    const v: Record<string, boolean> = {};
+    RAMS_PROJECTS.forEach((p) => { v[p.id] = true; });
+    setVisibility(v);
     setSaved(false);
   };
 
-  // Deselect all
   const deselectAll = () => {
-    const newVisibility: Record<string, boolean> = {};
-    RAMS_PROJECTS.forEach((p) => {
-      newVisibility[p.id] = false;
-    });
-    setVisibility(newVisibility);
+    const v: Record<string, boolean> = {};
+    RAMS_PROJECTS.forEach((p) => { v[p.id] = false; });
+    setVisibility(v);
     setSaved(false);
   };
 
-  // Select only projects with media
   const selectWithMedia = () => {
-    const newVisibility: Record<string, boolean> = {};
+    const v: Record<string, boolean> = {};
     RAMS_PROJECTS.forEach((p) => {
       const stats = mediaStats[p.id];
-      const hasRealMedia = stats ? (stats.videos > 0 || stats.photos > 0) : false;
-      newVisibility[p.id] = hasRealMedia;
+      v[p.id] = stats ? (stats.videos > 0 || stats.photos > 0) : false;
     });
-    setVisibility(newVisibility);
+    setVisibility(v);
     setSaved(false);
   };
 
-  // Save settings
   const saveSettings = () => {
     localStorage.setItem("rams-project-visibility", JSON.stringify(visibility));
     setSaved(true);
@@ -135,10 +170,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     setTimeout(() => setSaved(false), 2000);
   };
 
-  // Count visible projects
   const visibleCount = Object.values(visibility).filter(Boolean).length;
-
-  // Calculate total media stats
   const totalVideos = Object.values(mediaStats).reduce((sum, s) => sum + s.videos, 0);
   const totalPhotos = Object.values(mediaStats).reduce((sum, s) => sum + s.photos, 0);
   const projectsWithMedia = Object.values(mediaStats).filter(s => s.videos > 0 || s.photos > 0).length;
@@ -148,7 +180,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md"
             initial={{ opacity: 0 }}
@@ -157,7 +188,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             onClick={onClose}
           />
 
-          {/* Modal */}
           <motion.div
             className="fixed inset-4 z-[101] bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-2xl"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -167,11 +197,27 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-800">
-              <div>
+              <div className="flex items-center gap-4">
                 <h1 className="text-2xl font-bold text-white">{t("projectSettings")}</h1>
-                <p className="text-gray-400 text-sm mt-1">
-                  {t("selectProjectsToDisplay")} • {visibleCount} {t("of")} {RAMS_PROJECTS.length}
-                </p>
+                {/* Tabs */}
+                <div className="flex bg-gray-800 rounded-lg p-1">
+                  <button
+                    onClick={() => setActiveTab("projects")}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      activeTab === "projects" ? "bg-primary text-white" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    Проекты
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("diagnostics")}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      activeTab === "diagnostics" ? "bg-primary text-white" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    Диагностика
+                  </button>
+                </div>
               </div>
               <Button
                 variant="ghost"
@@ -183,154 +229,214 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               </Button>
             </div>
 
-            {/* Media Stats Summary */}
-            <div className="grid grid-cols-4 gap-3 p-6 pb-0">
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <div className="text-2xl font-bold text-blue-400">{totalVideos}</div>
-                <div className="text-xs text-gray-400">{t("videos")}</div>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <div className="text-2xl font-bold text-green-400">{totalPhotos}</div>
-                <div className="text-xs text-gray-400">{t("photos")}</div>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <div className="text-2xl font-bold text-purple-400">{projectsWithLogo}</div>
-                <div className="text-xs text-gray-400">{t("withLogo")}</div>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <div className="text-2xl font-bold text-primary">{projectsWithMedia}</div>
-                <div className="text-xs text-gray-400">{t("withMedia")}</div>
-              </div>
-            </div>
+            {activeTab === "projects" ? (
+              <>
+                {/* Media Stats Summary */}
+                <div className="grid grid-cols-4 gap-3 p-6 pb-0">
+                  <div className="bg-gray-800 rounded-xl p-3 text-center">
+                    <div className="text-2xl font-bold text-blue-400">{totalVideos}</div>
+                    <div className="text-xs text-gray-400">{t("videos")}</div>
+                  </div>
+                  <div className="bg-gray-800 rounded-xl p-3 text-center">
+                    <div className="text-2xl font-bold text-green-400">{totalPhotos}</div>
+                    <div className="text-xs text-gray-400">{t("photos")}</div>
+                  </div>
+                  <div className="bg-gray-800 rounded-xl p-3 text-center">
+                    <div className="text-2xl font-bold text-purple-400">{projectsWithLogo}</div>
+                    <div className="text-xs text-gray-400">{t("withLogo")}</div>
+                  </div>
+                  <div className="bg-gray-800 rounded-xl p-3 text-center">
+                    <div className="text-2xl font-bold text-primary">{projectsWithMedia}</div>
+                    <div className="text-xs text-gray-400">{t("withMedia")}</div>
+                  </div>
+                </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 p-6">
-              <button
-                onClick={selectAll}
-                className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg transition-colors text-white text-sm font-medium"
-              >
-                {t("selectAll")}
-              </button>
-              <button
-                onClick={deselectAll}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors text-white text-sm font-medium"
-              >
-                {t("deselectAll")}
-              </button>
-              <button
-                onClick={selectWithMedia}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-white text-sm font-medium"
-              >
-                {t("onlyWithMedia")}
-              </button>
-              <div className="flex-1" />
-              <button
-                onClick={saveSettings}
-                className={`px-6 py-2 rounded-lg transition-colors font-semibold ${
-                  saved
-                    ? "bg-green-500 text-white"
-                    : "bg-primary hover:bg-primary/90 text-white"
-                }`}
-              >
-                {saved ? t("saved") : t("save")}
-              </button>
-            </div>
+                {/* Actions */}
+                <div className="flex items-center gap-3 p-6">
+                  <button onClick={selectAll} className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg transition-colors text-white text-sm font-medium">
+                    {t("selectAll")}
+                  </button>
+                  <button onClick={deselectAll} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition-colors text-white text-sm font-medium">
+                    {t("deselectAll")}
+                  </button>
+                  <button onClick={selectWithMedia} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors text-white text-sm font-medium">
+                    {t("onlyWithMedia")}
+                  </button>
+                  <div className="flex-1" />
+                  <span className="text-gray-400 text-sm">{visibleCount} / {RAMS_PROJECTS.length}</span>
+                  <button
+                    onClick={saveSettings}
+                    className={`px-6 py-2 rounded-lg transition-colors font-semibold ${
+                      saved ? "bg-green-500 text-white" : "bg-primary hover:bg-primary/90 text-white"
+                    }`}
+                  >
+                    {saved ? t("saved") : t("save")}
+                  </button>
+                </div>
 
-            {/* Project Grid */}
-            <div className="flex-1 overflow-y-auto p-6 pt-0">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {RAMS_PROJECTS.map((project, index) => {
-                  const isVisible = visibility[project.id] !== false;
-                  const stats = mediaStats[project.id];
-                  const videoCount = stats?.videos || 0;
-                  const photoCount = stats?.photos || 0;
-                  const hasLogo = stats?.hasLogo || false;
-                  const totalMedia = videoCount + photoCount;
+                {/* Project Grid */}
+                <div className="flex-1 overflow-y-auto p-6 pt-0">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {RAMS_PROJECTS.map((project, index) => {
+                      const isVisible = visibility[project.id] !== false;
+                      const stats = mediaStats[project.id];
+                      const videoCount = stats?.videos || 0;
+                      const photoCount = stats?.photos || 0;
+                      const hasLogo = stats?.hasLogo || false;
+                      const totalMedia = videoCount + photoCount;
 
-                  return (
-                    <motion.div
-                      key={project.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.01 }}
-                      onClick={() => toggleProject(project.id)}
-                      className={`relative p-3 rounded-xl cursor-pointer transition-all border-2 ${
-                        isVisible
-                          ? "bg-gray-800 border-primary"
-                          : "bg-gray-800/50 border-gray-700 opacity-50"
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <div
-                        className={`absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center ${
-                          isVisible ? "bg-primary" : "bg-gray-600"
-                        }`}
-                      >
-                        {isVisible && (
-                          <svg
-                            className="w-3 h-3 text-white"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={3}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        )}
-                      </div>
-
-                      {/* Project Number */}
-                      <div className="text-[10px] text-gray-500 mb-0.5">
-                        #{index + 1}
-                      </div>
-
-                      {/* Project Name */}
-                      <h3 className="font-bold text-sm leading-tight text-white pr-6">
-                        {project.name}
-                      </h3>
-                      <p className="text-xs text-gray-400 truncate">{project.title}</p>
-
-                      {/* Status Badge */}
-                      <div
-                        className={`mt-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                          isProjectUnderConstruction(project.status)
-                            ? "bg-yellow-500/20 text-yellow-400"
-                            : "bg-green-500/20 text-green-400"
-                        }`}
-                      >
-                        {getLocalizedStatus(project.status, language)}
-                      </div>
-
-                      {/* Media Stats */}
-                      <div className="mt-2 pt-2 border-t border-gray-700">
-                        <div className="flex items-center gap-2 text-[10px]">
-                          <div className={`flex items-center gap-0.5 ${videoCount > 0 ? 'text-blue-400' : 'text-gray-600'}`}>
-                            <Icon name="videocam" size="sm" />
-                            <span>{videoCount}</span>
+                      return (
+                        <motion.div
+                          key={project.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.01 }}
+                          onClick={() => toggleProject(project.id)}
+                          className={`relative p-3 rounded-xl cursor-pointer transition-all border-2 ${
+                            isVisible ? "bg-gray-800 border-primary" : "bg-gray-800/50 border-gray-700 opacity-50"
+                          }`}
+                        >
+                          <div className={`absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center ${isVisible ? "bg-primary" : "bg-gray-600"}`}>
+                            {isVisible && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
                           </div>
-                          <div className={`flex items-center gap-0.5 ${photoCount > 0 ? 'text-green-400' : 'text-gray-600'}`}>
-                            <Icon name="photo" size="sm" />
-                            <span>{photoCount}</span>
+                          <div className="text-[10px] text-gray-500 mb-0.5">#{index + 1}</div>
+                          <h3 className="font-bold text-sm leading-tight text-white pr-6">{project.name}</h3>
+                          <p className="text-xs text-gray-400 truncate">{project.title}</p>
+                          <div className={`mt-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            isProjectUnderConstruction(project.status) ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400"
+                          }`}>
+                            {getLocalizedStatus(project.status, language)}
                           </div>
-                          <div className={`${hasLogo ? 'text-purple-400' : 'text-gray-600'}`}>
-                            {hasLogo ? '✓' : '✗'}
+                          <div className="mt-2 pt-2 border-t border-gray-700">
+                            <div className="flex items-center gap-2 text-[10px]">
+                              <div className={`flex items-center gap-0.5 ${videoCount > 0 ? 'text-blue-400' : 'text-gray-600'}`}>
+                                <Icon name="videocam" size="sm" /><span>{videoCount}</span>
+                              </div>
+                              <div className={`flex items-center gap-0.5 ${photoCount > 0 ? 'text-green-400' : 'text-gray-600'}`}>
+                                <Icon name="photo" size="sm" /><span>{photoCount}</span>
+                              </div>
+                              <div className={`${hasLogo ? 'text-purple-400' : 'text-gray-600'}`}>
+                                {hasLogo ? '✓' : '✗'}
+                              </div>
+                            </div>
+                            {totalMedia === 0 && (
+                              <div className="mt-1 text-[10px] text-red-400">{t("noMedia")}</div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Diagnostics Tab */
+              <div className="flex-1 overflow-y-auto p-6">
+                {diagnostics ? (
+                  <div className="space-y-6">
+                    {/* System Info */}
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3">Системная информация</h3>
+                      <div className="bg-gray-800 rounded-xl p-4 font-mono text-sm space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Platform:</span>
+                          <span className="text-white">{diagnostics.platform}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Packaged:</span>
+                          <span className={diagnostics.isPackaged ? "text-green-400" : "text-yellow-400"}>
+                            {diagnostics.isPackaged ? "Да (production)" : "Нет (development)"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Electron:</span>
+                          <span className={isElectron ? "text-green-400" : "text-yellow-400"}>
+                            {isElectron ? "Да" : "Нет (браузер)"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Paths */}
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3">Пути</h3>
+                      <div className="bg-gray-800 rounded-xl p-4 font-mono text-xs space-y-3">
+                        <div>
+                          <div className="text-gray-500 mb-1">App Path:</div>
+                          <div className="text-white break-all">{diagnostics.appPath}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 mb-1">Exe Path:</div>
+                          <div className="text-white break-all">{diagnostics.exePath}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 mb-1">Resources Path:</div>
+                          <div className="text-white break-all">{diagnostics.resourcesPath}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 mb-1">Media Root (активный):</div>
+                          <div className={`break-all font-bold ${diagnostics.mediaRootExists ? "text-green-400" : "text-red-400"}`}>
+                            {diagnostics.mediaRoot}
+                            {diagnostics.mediaRootExists ? " ✓" : " ✗ НЕ НАЙДЕН"}
                           </div>
                         </div>
-                        {totalMedia === 0 && (
-                          <div className="mt-1 text-[10px] text-red-400">
-                            {t("noMedia")}
-                          </div>
-                        )}
                       </div>
-                    </motion.div>
-                  );
-                })}
+                    </div>
+
+                    {/* Candidates */}
+                    {diagnostics.candidates.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-bold text-white mb-3">Поиск медиа (candidates)</h3>
+                        <div className="space-y-2">
+                          {diagnostics.candidates.map((c, i) => (
+                            <div key={i} className={`bg-gray-800 rounded-xl p-4 border-2 ${
+                              c.projectsExists ? "border-green-500/50" : "border-red-500/30"
+                            }`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-white font-bold">{c.label}</span>
+                                <span className={`text-sm font-bold ${c.projectsExists ? "text-green-400" : "text-red-400"}`}>
+                                  {c.projectsExists ? "✓ НАЙДЕН" : "✗ НЕТ"}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-400 font-mono break-all">{c.path}/projects/</div>
+                              {c.sampleFiles.length > 0 && (
+                                <div className="mt-2 text-xs text-gray-500">
+                                  Папки: {c.sampleFiles.join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Instructions */}
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-3">Инструкция</h3>
+                      <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl p-4 text-sm text-blue-200">
+                        <p className="mb-2">Медиа файлы должны быть в одной из этих папок:</p>
+                        <ul className="list-disc list-inside space-y-1 font-mono text-xs">
+                          <li>[exe папка]/media/projects/</li>
+                          <li>[exe папка]/../media/projects/</li>
+                          <li>resources/media/projects/</li>
+                        </ul>
+                        <p className="mt-3 text-xs text-blue-300">
+                          Структура: media/projects/[id]/images/scenes/01.jpg
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">
+                    Загрузка диагностики...
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             {/* Footer */}
             <div className="p-4 border-t border-gray-800 text-center text-gray-500 text-xs">

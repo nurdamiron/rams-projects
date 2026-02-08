@@ -18,14 +18,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
-        {/* Preconnect FIRST for performance */}
+        {/* Preconnect for Google Fonts (Manrope - online only) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Material Symbols Icons - load after preconnect */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-        />
+        {/* Material Symbols loaded locally via globals.css @font-face */}
       </head>
       <body className="antialiased">
         <ThemeProvider>

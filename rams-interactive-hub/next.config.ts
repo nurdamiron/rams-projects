@@ -1,11 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Remove "output: export" for Electron build - we need server-side features
+  output: "export",
+  distDir: "out",
   images: {
     unoptimized: true,
   },
-  serverExternalPackages: ["serialport"],
+  trailingSlash: true,
 };
 
 export default nextConfig;

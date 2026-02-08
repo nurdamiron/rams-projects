@@ -168,11 +168,12 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                   {localizedProject?.description || project.description}
                 </p>
                 {project.concept && (
-                  <div className="mt-4 p-5 rounded-2xl bg-primary/10">
-                    <p className="text-primary italic text-lg leading-relaxed">
-                      "{project.concept}"
-                    </p>
-                  </div>
+                    <div className="mt-4 p-5 rounded-2xl bg-primary/10">
+                      <p className="text-primary italic text-lg leading-relaxed">
+                        &quot;{project.concept}&quot;
+                      </p>
+                    </div>
+
                 )}
               </section>
 
