@@ -1,88 +1,146 @@
-import { Project } from "./types";
-import WiFiHardwareService from "./hardware/wifi";
-import { RAMS_PROJECTS } from "./data/projects";
+import HardwareIPCService, { type BlockMapping } from "./hardware/wifi";
+import { GALLERY_CARDS } from "./data/gallery-config";
 
 /**
- * Service to communicate with the hardware directly (Client-Side)
+ * Hardware Service Facade (Client-Side)
+ * Maps project IDs to physical block numbers and delegates to IPC service.
+ * Custom block mapping (from admin panel) overrides the default values in gallery-config.
  */
+
+// Cached custom mapping — loaded once, updated via setBlockMapping
+let cachedMapping: BlockMapping | null = null;
+
+/**
+ * Resolve project ID → physical block number.
+ * 1. Find the gallery card that contains this project
+ * 2. Check custom mapping for that card ID (override)
+ * 3. Fall back to the default blockNumber from gallery-config
+ */
+async function resolveBlockNumber(projectId: string): Promise<number | undefined> {
+  const card = GALLERY_CARDS.find(c => c.projectIds.includes(projectId));
+  if (!card) return undefined;
+
+  // Load custom mapping if not cached yet
+  if (cachedMapping === null) {
+    const hw = HardwareIPCService.getInstance();
+    cachedMapping = await hw.getBlockMapping();
+  }
+
+  // Custom mapping overrides default
+  if (cachedMapping[card.id] !== undefined) {
+    return cachedMapping[card.id];
+  }
+
+  return card.blockNumber;
+}
+
 export const hardwareService = {
   /**
-   * Helper: Resolve projectId string (slug) to hardwareId (number)
+   * Select a project — raises the corresponding physical block
    */
-  resolveProjectId(projectId: string | number): number | undefined {
-    if (typeof projectId === "number") return projectId;
-    const project = RAMS_PROJECTS.find((p) => p.id === projectId);
-    return project?.hardwareId; // Returns undefined if not found, which is fine (optional)
-  },
-
-  /**
-   * Send a raw command to the hardware via WiFi Service
-   */
-  async sendCommand(payload: any) {
-    try {
-      const wifi = WiFiHardwareService.getInstance();
-
-      // If payload has a projectId, resolve it before sending
-      if (payload.projectId) {
-        const resolvedId = this.resolveProjectId(payload.projectId);
-        if (resolvedId) {
-          payload.projectId = resolvedId;
-        }
-      }
-
-      const success = await wifi.sendCommand(payload);
-      return { success };
-    } catch (error) {
-      console.error("Hardware Service Error:", error);
-      return { success: false, error };
+  async selectProject(projectId: string): Promise<boolean> {
+    const blockNumber = await resolveBlockNumber(projectId);
+    if (!blockNumber) {
+      console.warn(`[HardwareService] No block number found for project: ${projectId}`);
+      return false;
     }
+    const hw = HardwareIPCService.getInstance();
+    return hw.blockUp(blockNumber);
   },
 
   /**
-   * Control project lighting
+   * Deselect a project — lowers the corresponding physical block
    */
-  async setProjectLighting(projectId: string | number, isActive: boolean) {
-    return this.sendCommand({
-      action: isActive ? "highlight" : "off",
-      projectId: projectId,
-      data: { isActive }
-    });
+  async deselectProject(projectId: string): Promise<boolean> {
+    const blockNumber = await resolveBlockNumber(projectId);
+    if (!blockNumber) return false;
+    const hw = HardwareIPCService.getInstance();
+    return hw.blockDown(blockNumber);
   },
 
   /**
-   * Control Actuators (Lift/Roof)
+   * Reset all — lower all blocks
    */
-  async setActuatorState(element: string, state: "up" | "down") {
-    return this.sendCommand({
-      action: "actuator",
-      target: element,
-      state: state
-    });
+  async resetAll(): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.allDown();
   },
 
   /**
-   * Reset all hardware effects
+   * Emergency stop — immediately stop all actuators
    */
-  async resetAll() {
-    return this.sendCommand({
-      action: "reset"
-    });
+  async emergencyStop(): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.allStop();
   },
 
   /**
-   * Cancel all pending hardware commands
-   * Useful when user exits or navigates away quickly
+   * Set LED mode (RAINBOW, PULSE, WAVE, STATIC, OFF)
    */
-  cancelPending() {
-    const wifi = WiFiHardwareService.getInstance();
-    wifi.cancelPending();
+  async setLedMode(mode: string): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.setLedMode(mode);
   },
 
   /**
-   * Get currently active project on hardware
+   * Set LED color (hex string without #, e.g. "FF0000")
    */
-  getCurrentProject() {
-    const wifi = WiFiHardwareService.getInstance();
-    return wifi.getCurrentProject();
-  }
+  async setLedColor(hexColor: string): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.setLedColor(hexColor);
+  },
+
+  /**
+   * Set LED brightness (0-255)
+   */
+  async setLedBrightness(brightness: number): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.setLedBrightness(brightness);
+  },
+
+  /**
+   * Get hardware connection status
+   */
+  async getStatus() {
+    const hw = HardwareIPCService.getInstance();
+    return hw.getStatus();
+  },
+
+  /**
+   * Set ESP32 IP address
+   */
+  async setIP(ip: string): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.setIP(ip);
+  },
+
+  /**
+   * Ping ESP32
+   */
+  async ping() {
+    const hw = HardwareIPCService.getInstance();
+    return hw.ping();
+  },
+
+  /**
+   * Get current block mapping (custom overrides)
+   */
+  async getBlockMapping(): Promise<BlockMapping> {
+    const hw = HardwareIPCService.getInstance();
+    const mapping = await hw.getBlockMapping();
+    cachedMapping = mapping;
+    return mapping;
+  },
+
+  /**
+   * Save custom block mapping and invalidate cache
+   */
+  async setBlockMapping(mapping: BlockMapping): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    const success = await hw.setBlockMapping(mapping);
+    if (success) {
+      cachedMapping = mapping;
+    }
+    return success;
+  },
 };

@@ -10,6 +10,7 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { easings } from "@/lib/animations";
 import { useLanguage, Language } from "@/lib/i18n";
+import { hardwareService } from "@/lib/hardware-service";
 
 // Locale mapping for date/time formatting
 const localeMap: Record<Language, string> = {
@@ -98,6 +99,16 @@ export const Screensaver: React.FC<ScreensaverProps> = ({
       });
     };
   }, [resetTimer]);
+
+  // Hardware control when screensaver activates/deactivates
+  React.useEffect(() => {
+    if (isActive) {
+      hardwareService.resetAll();
+      hardwareService.setLedMode("RAINBOW");
+    } else {
+      hardwareService.setLedMode("STATIC");
+    }
+  }, [isActive]);
 
   // Handle forceShow prop
   React.useEffect(() => {

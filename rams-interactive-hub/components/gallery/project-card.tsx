@@ -11,7 +11,6 @@ import { motion, useMotionValue, useSpring } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Project } from "@/lib/types";
 import { easings } from "@/lib/animations";
-import { hardwareService } from "@/lib/hardware-service";
 import { getMediaUrl } from "@/lib/media-utils";
 import { useLanguage, getLocalizedProject, getLocalizedStatus, getLocalizedClass, isProjectUnderConstruction } from "@/lib/i18n";
 import { GalleryCard } from "@/lib/data/gallery-config";
@@ -95,7 +94,6 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       onMouseMove={handleMouseMove}
       onMouseEnter={() => {
         setIsHovered(true);
-        hardwareService.setProjectLighting(mainProject.id, true);
       }}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}

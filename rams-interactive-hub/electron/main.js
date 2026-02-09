@@ -1,6 +1,7 @@
 const { app, BrowserWindow, globalShortcut, protocol, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const dgram = require('dgram');
 
 // Register custom schemes
 protocol.registerSchemesAsPrivileged([
@@ -36,6 +37,170 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
   log(`UNHANDLED REJECTION: ${reason}`);
 });
+
+// ===================== UDP HARDWARE CLIENT =====================
+const UDP_PORT = 4210;
+const COMMAND_DEBOUNCE_MS = 150;
+const HEALTH_CHECK_INTERVAL = 10000;
+const UDP_TIMEOUT_MS = 3000;
+
+const hardwareConfigPath = path.join(app.getPath('userData'), 'hardware-config.json');
+
+let udpClient = null;
+let espIP = '192.168.1.100';
+let blockMapping = {}; // { galleryCardId: physicalBlockNumber } — custom overrides
+let currentBlock = null;
+let lastCommandTime = 0;
+let debounceTimer = null;
+let healthCheckTimer = null;
+let espConnected = false;
+let lastPong = 0;
+
+// Load saved hardware config
+function loadHardwareConfig() {
+  try {
+    if (fs.existsSync(hardwareConfigPath)) {
+      const config = JSON.parse(fs.readFileSync(hardwareConfigPath, 'utf8'));
+      if (config.espIP) espIP = config.espIP;
+      if (config.blockMapping) blockMapping = config.blockMapping;
+      log(`[UDP] Loaded config: IP=${espIP}, mapping keys=${Object.keys(blockMapping).length}`);
+    }
+  } catch (e) {
+    log(`[UDP] Failed to load config: ${e.message}`);
+  }
+}
+
+function saveHardwareConfig() {
+  try {
+    fs.writeFileSync(hardwareConfigPath, JSON.stringify({ espIP, blockMapping }, null, 2));
+    log(`[UDP] Config saved: IP=${espIP}, mapping keys=${Object.keys(blockMapping).length}`);
+  } catch (e) {
+    log(`[UDP] Failed to save config: ${e.message}`);
+  }
+}
+
+// Initialize UDP socket
+function initUdp() {
+  loadHardwareConfig();
+
+  udpClient = dgram.createSocket('udp4');
+
+  udpClient.on('error', (err) => {
+    log(`[UDP] Socket error: ${err.message}`);
+  });
+
+  udpClient.on('message', (msg, rinfo) => {
+    const response = msg.toString().trim();
+    log(`[UDP] Response from ${rinfo.address}:${rinfo.port}: ${response}`);
+
+    if (response.startsWith('PONG') || response.startsWith('ACK')) {
+      espConnected = true;
+      lastPong = Date.now();
+    }
+  });
+
+  udpClient.bind(() => {
+    const addr = udpClient.address();
+    log(`[UDP] Client bound to port ${addr.port}`);
+  });
+
+  startHealthCheck();
+}
+
+// Send raw UDP command string
+function sendUdpCommand(cmd) {
+  return new Promise((resolve) => {
+    if (!udpClient) {
+      log('[UDP] Socket not initialized');
+      resolve(false);
+      return;
+    }
+
+    const buffer = Buffer.from(cmd);
+    udpClient.send(buffer, 0, buffer.length, UDP_PORT, espIP, (err) => {
+      if (err) {
+        log(`[UDP] Send error: ${err.message}`);
+        espConnected = false;
+        resolve(false);
+      } else {
+        log(`[UDP] Sent: ${cmd} → ${espIP}:${UDP_PORT}`);
+        lastCommandTime = Date.now();
+        resolve(true);
+      }
+    });
+  });
+}
+
+// Debounced block command with automatic DOWN for previous block
+let pendingResolve = null; // Track pending promise so we can resolve it on cancel
+
+function sendDebouncedBlockCommand(block, action) {
+  return new Promise((resolve) => {
+    // If there's a pending debounced command, resolve it as false (cancelled)
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      if (pendingResolve) {
+        pendingResolve(false);
+        pendingResolve = null;
+      }
+    }
+
+    pendingResolve = resolve;
+
+    const timeSinceLast = Date.now() - lastCommandTime;
+    const delay = Math.max(0, COMMAND_DEBOUNCE_MS - timeSinceLast);
+
+    debounceTimer = setTimeout(async () => {
+      debounceTimer = null;
+      pendingResolve = null;
+
+      // If raising a new block, lower the previous one first
+      if (action === 'UP' && currentBlock !== null && currentBlock !== block) {
+        await sendUdpCommand(`BLOCK:${currentBlock}:DOWN`);
+      }
+
+      const success = await sendUdpCommand(`BLOCK:${block}:${action}`);
+
+      if (success) {
+        if (action === 'UP') currentBlock = block;
+        else if (action === 'DOWN' && currentBlock === block) currentBlock = null;
+      }
+
+      resolve(success);
+    }, delay);
+  });
+}
+
+// Health check — ping ESP32 periodically
+function startHealthCheck() {
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
+  healthCheckTimer = setInterval(() => {
+    sendUdpCommand('PING');
+    // Mark as disconnected if no PONG for 30s
+    if (lastPong > 0 && Date.now() - lastPong > 30000) {
+      espConnected = false;
+    }
+  }, HEALTH_CHECK_INTERVAL);
+}
+
+// Cleanup UDP resources
+function cleanupUdp() {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  if (healthCheckTimer) {
+    clearInterval(healthCheckTimer);
+    healthCheckTimer = null;
+  }
+  if (udpClient) {
+    try { udpClient.close(); } catch (e) {}
+    udpClient = null;
+  }
+  log('[UDP] Cleanup complete');
+}
+
+// ===================== END UDP =====================
 
 // Get media root path - searches multiple locations
 function getMediaRoot() {
@@ -156,6 +321,9 @@ function createWindow() {
 app.whenReady().then(() => {
   log('App ready');
 
+  // Initialize UDP client for hardware communication
+  initUdp();
+
   // Register app:// protocol to serve static files (solves absolute path issue)
   const outDir = path.join(__dirname, '..', 'out');
   const mime = {
@@ -257,7 +425,7 @@ app.whenReady().then(() => {
     callback({ path: resourcePath });
   });
 
-  // IPC handlers
+  // IPC handlers — existing
   ipcMain.handle('get-media-root', () => getMediaRoot());
 
   ipcMain.handle('get-projects-data', () => {
@@ -354,6 +522,77 @@ app.whenReady().then(() => {
     };
   });
 
+  // ===================== Hardware IPC Handlers =====================
+
+  ipcMain.handle('hardware-block-up', async (_event, blockNumber) => {
+    return sendDebouncedBlockCommand(blockNumber, 'UP');
+  });
+
+  ipcMain.handle('hardware-block-down', async (_event, blockNumber) => {
+    return sendDebouncedBlockCommand(blockNumber, 'DOWN');
+  });
+
+  ipcMain.handle('hardware-all-stop', async () => {
+    currentBlock = null;
+    return sendUdpCommand('ALL:STOP');
+  });
+
+  ipcMain.handle('hardware-all-down', async () => {
+    currentBlock = null;
+    return sendUdpCommand('ALL:DOWN');
+  });
+
+  ipcMain.handle('hardware-led-mode', async (_event, mode) => {
+    return sendUdpCommand(`LED:MODE:${mode}`);
+  });
+
+  ipcMain.handle('hardware-led-color', async (_event, hexColor) => {
+    return sendUdpCommand(`LED:COLOR:${hexColor}`);
+  });
+
+  ipcMain.handle('hardware-led-brightness', async (_event, brightness) => {
+    return sendUdpCommand(`LED:BRIGHTNESS:${brightness}`);
+  });
+
+  ipcMain.handle('hardware-get-status', () => {
+    return {
+      connected: espConnected,
+      ip: espIP,
+      lastPong,
+      currentBlock,
+    };
+  });
+
+  ipcMain.handle('hardware-set-ip', (_event, newIP) => {
+    espIP = newIP;
+    saveHardwareConfig();
+    // Reset connection state and ping immediately
+    espConnected = false;
+    lastPong = 0;
+    sendUdpCommand('PING');
+    return { success: true, ip: espIP };
+  });
+
+  ipcMain.handle('hardware-ping', async () => {
+    const sent = await sendUdpCommand('PING');
+    return { sent, connected: espConnected, lastPong };
+  });
+
+  ipcMain.handle('hardware-send-command', async (_event, cmd) => {
+    return sendUdpCommand(cmd);
+  });
+
+  ipcMain.handle('hardware-get-block-mapping', () => {
+    return blockMapping;
+  });
+
+  ipcMain.handle('hardware-set-block-mapping', (_event, newMapping) => {
+    blockMapping = newMapping;
+    saveHardwareConfig();
+    log(`[UDP] Block mapping updated: ${JSON.stringify(blockMapping)}`);
+    return { success: true };
+  });
+
   // Log all registered protocols
   log('[Protocols] app:// and media:// registered');
 
@@ -377,6 +616,17 @@ app.on('will-quit', () => {
 });
 
 app.on('before-quit', () => {
+  log('[UDP] Sending ALL:STOP before quit...');
+  // Send ALL:STOP synchronously before quitting
+  if (udpClient) {
+    try {
+      const buffer = Buffer.from('ALL:STOP');
+      udpClient.send(buffer, 0, buffer.length, UDP_PORT, espIP);
+    } catch (e) {
+      log(`[UDP] Failed to send ALL:STOP on quit: ${e.message}`);
+    }
+  }
+  cleanupUdp();
   log('=== RAMS Interactive Hub Stopped ===');
   try { logStream.end(); } catch (e) {}
 });

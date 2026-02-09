@@ -8,9 +8,11 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RAMS_PROJECTS } from "@/lib/data/projects";
+import { GALLERY_CARDS } from "@/lib/data/gallery-config";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { useLanguage, getLocalizedStatus, isProjectUnderConstruction } from "@/lib/i18n";
+import { hardwareService } from "@/lib/hardware-service";
 
 interface MediaStats {
   projectId: string;
@@ -54,8 +56,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [saved, setSaved] = React.useState(false);
   const [mediaStats, setMediaStats] = React.useState<Record<string, MediaStats>>({});
   const [loadingStats, setLoadingStats] = React.useState(true);
-  const [activeTab, setActiveTab] = React.useState<"projects" | "diagnostics">("projects");
+  const [activeTab, setActiveTab] = React.useState<"projects" | "diagnostics" | "hardware">("projects");
   const [diagnostics, setDiagnostics] = React.useState<DiagnosticInfo | null>(null);
+  const [hwIP, setHwIP] = React.useState("");
+  const [hwConnected, setHwConnected] = React.useState(false);
+  const [hwPinging, setHwPinging] = React.useState(false);
+  const [hwSavedIP, setHwSavedIP] = React.useState(false);
+  const [hwLedMode, setHwLedMode] = React.useState("RAINBOW");
+  const [hwBlockMapping, setHwBlockMapping] = React.useState<Record<string, number>>({});
+  const [hwMappingSaved, setHwMappingSaved] = React.useState(false);
   const { t, language } = useLanguage();
 
   const isElectron = typeof window !== "undefined" && (window as any).electron?.isElectron;
@@ -112,6 +121,27 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
     loadDiag();
   }, [isOpen, activeTab, isElectron]);
+
+  // Load hardware status + block mapping
+  React.useEffect(() => {
+    if (!isOpen || activeTab !== "hardware") return;
+
+    const loadHwStatus = async () => {
+      const status = await hardwareService.getStatus();
+      setHwIP(status.ip || "192.168.1.100");
+      setHwConnected(status.connected);
+    };
+
+    const loadMapping = async () => {
+      const mapping = await hardwareService.getBlockMapping();
+      setHwBlockMapping(mapping);
+    };
+
+    loadHwStatus();
+    loadMapping();
+    const interval = setInterval(loadHwStatus, 3000);
+    return () => clearInterval(interval);
+  }, [isOpen, activeTab]);
 
   // Load saved visibility from localStorage
   React.useEffect(() => {
@@ -208,6 +238,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     }`}
                   >
                     Проекты
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("hardware")}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      activeTab === "hardware" ? "bg-primary text-white" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {t("hardware")}
                   </button>
                   <button
                     onClick={() => setActiveTab("diagnostics")}
@@ -333,6 +371,181 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   </div>
                 </div>
               </>
+            ) : activeTab === "hardware" ? (
+              /* Hardware Tab */
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-2xl mx-auto space-y-6">
+                  {/* Connection Status */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <h3 className="text-lg font-bold text-white mb-4">{t("connectionStatus")}</h3>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`w-4 h-4 rounded-full ${hwConnected ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"}`} />
+                      <span className={`text-sm font-semibold ${hwConnected ? "text-green-400" : "text-red-400"}`}>
+                        {hwConnected ? t("connected") : t("disconnected")}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* IP Configuration */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <h3 className="text-lg font-bold text-white mb-4">{t("espIpAddress")}</h3>
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        value={hwIP}
+                        onChange={(e) => { setHwIP(e.target.value); setHwSavedIP(false); }}
+                        className="flex-1 bg-gray-700 text-white px-4 py-2.5 rounded-lg border border-gray-600 focus:border-primary focus:outline-none font-mono text-sm"
+                        placeholder="192.168.1.100"
+                      />
+                      <button
+                        onClick={async () => {
+                          await hardwareService.setIP(hwIP);
+                          setHwSavedIP(true);
+                          setTimeout(() => setHwSavedIP(false), 2000);
+                        }}
+                        className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                          hwSavedIP ? "bg-green-500 text-white" : "bg-primary hover:bg-primary/90 text-white"
+                        }`}
+                      >
+                        {hwSavedIP ? t("saved") : t("save")}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ping */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={async () => {
+                          setHwPinging(true);
+                          await hardwareService.ping();
+                          // Wait a moment for the PONG to arrive
+                          setTimeout(async () => {
+                            const status = await hardwareService.getStatus();
+                            setHwConnected(status.connected);
+                            setHwPinging(false);
+                          }, 1500);
+                        }}
+                        disabled={hwPinging}
+                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 rounded-lg text-white font-semibold text-sm transition-colors"
+                      >
+                        {hwPinging ? "..." : t("ping")}
+                      </button>
+                      <span className="text-gray-400 text-sm">
+                        UDP → {hwIP}:4210
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Emergency Stop */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <button
+                      onClick={() => hardwareService.emergencyStop()}
+                      className="w-full px-6 py-4 bg-red-600 hover:bg-red-500 active:bg-red-700 rounded-xl text-white font-black text-lg uppercase tracking-wider transition-colors shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+                    >
+                      {t("emergencyStop")}
+                    </button>
+                  </div>
+
+                  {/* LED Mode */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <h3 className="text-lg font-bold text-white mb-4">{t("ledMode")}</h3>
+                    <div className="grid grid-cols-5 gap-2">
+                      {["RAINBOW", "PULSE", "WAVE", "STATIC", "OFF"].map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={async () => {
+                            setHwLedMode(mode);
+                            await hardwareService.setLedMode(mode);
+                          }}
+                          className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                            hwLedMode === mode
+                              ? "bg-primary text-white"
+                              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Block Mapping */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-white">{t("blockMapping")}</h3>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setHwBlockMapping({});
+                            setHwMappingSaved(false);
+                          }}
+                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 text-xs font-medium transition-colors"
+                        >
+                          {t("resetToDefault")}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await hardwareService.setBlockMapping(hwBlockMapping);
+                            setHwMappingSaved(true);
+                            setTimeout(() => setHwMappingSaved(false), 2000);
+                          }}
+                          className={`px-4 py-1.5 rounded-lg font-semibold text-xs transition-colors ${
+                            hwMappingSaved ? "bg-green-500 text-white" : "bg-primary hover:bg-primary/90 text-white"
+                          }`}
+                        >
+                          {hwMappingSaved ? t("saved") : t("save")}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-gray-400 text-xs mb-4">{t("blockMappingHint")}</p>
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                      {GALLERY_CARDS.map((card) => {
+                        const customBlock = hwBlockMapping[card.id];
+                        const effectiveBlock = customBlock !== undefined ? customBlock : card.blockNumber;
+                        const isOverridden = customBlock !== undefined;
+                        return (
+                          <div
+                            key={card.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                              isOverridden ? "bg-primary/10 border-primary/30" : "bg-gray-700/50 border-gray-700"
+                            }`}
+                          >
+                            <span className="text-gray-500 text-xs font-mono w-6 text-right">#{card.id}</span>
+                            <span className="flex-1 text-white text-sm font-medium truncate">
+                              {card.name}{card.title ? ` ${card.title}` : ""}
+                            </span>
+                            <span className="text-gray-500 text-xs">{t("block")}:</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={15}
+                              value={effectiveBlock}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (val >= 1 && val <= 15) {
+                                  setHwBlockMapping((prev) => ({ ...prev, [card.id]: val }));
+                                  setHwMappingSaved(false);
+                                }
+                              }}
+                              className="w-16 bg-gray-900 text-white text-center px-2 py-1.5 rounded-lg border border-gray-600 focus:border-primary focus:outline-none font-mono text-sm"
+                            />
+                            <button
+                              onClick={async () => {
+                                await hardwareService.selectProject(card.projectIds[0]);
+                              }}
+                              className="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-xs font-medium transition-colors"
+                              title="Test UP"
+                            >
+                              TEST
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
               /* Diagnostics Tab */
               <div className="flex-1 overflow-y-auto p-6">

@@ -540,6 +540,80 @@ export const translations = {
     en: "Select projects to display in the application",
   },
 
+  // Hardware tab
+  hardware: {
+    ru: "Оборудование",
+    kk: "Жабдық",
+    tr: "Donanim",
+    en: "Hardware",
+  },
+  espIpAddress: {
+    ru: "IP адрес ESP32",
+    kk: "ESP32 IP мекенжайы",
+    tr: "ESP32 IP Adresi",
+    en: "ESP32 IP Address",
+  },
+  connectionStatus: {
+    ru: "Статус подключения",
+    kk: "Қосылу күйі",
+    tr: "Baglanti Durumu",
+    en: "Connection Status",
+  },
+  connected: {
+    ru: "Подключено",
+    kk: "Қосылған",
+    tr: "Bagli",
+    en: "Connected",
+  },
+  disconnected: {
+    ru: "Отключено",
+    kk: "Ажыратылған",
+    tr: "Bagli Degil",
+    en: "Disconnected",
+  },
+  emergencyStop: {
+    ru: "АВАРИЙНАЯ ОСТАНОВКА",
+    kk: "ШҰҒЫЛ ТОҚТАТУ",
+    tr: "ACIL DURDURMA",
+    en: "EMERGENCY STOP",
+  },
+  ledMode: {
+    ru: "Режим LED",
+    kk: "LED режимі",
+    tr: "LED Modu",
+    en: "LED Mode",
+  },
+  ping: {
+    ru: "Пинг",
+    kk: "Пинг",
+    tr: "Ping",
+    en: "Ping",
+  },
+  blockMapping: {
+    ru: "Маппинг блоков",
+    kk: "Блоктар маппингi",
+    tr: "Blok Esleme",
+    en: "Block Mapping",
+  },
+  blockMappingHint: {
+    ru: "Назначьте какой физический блок (1-15) соответствует каждому проекту. Нажмите TEST для проверки.",
+    kk: "Әр жобаға қандай физикалық блок (1-15) сәйкес келетінін тағайындаңыз. Тексеру үшін TEST басыңыз.",
+    tr: "Her projeye hangi fiziksel blogun (1-15) karsilik geldigini atayin. Test icin TEST'e basin.",
+    en: "Assign which physical block (1-15) corresponds to each project. Press TEST to verify.",
+  },
+  resetToDefault: {
+    ru: "Сбросить",
+    kk: "Қалпына келтіру",
+    tr: "Sifirla",
+    en: "Reset",
+  },
+  block: {
+    ru: "Блок",
+    kk: "Блок",
+    tr: "Blok",
+    en: "Block",
+  },
+
   // Short labels for project cards
   floorsShort: {
     ru: "эт.",

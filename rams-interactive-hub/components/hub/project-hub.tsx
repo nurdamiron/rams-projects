@@ -71,11 +71,11 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
     return () => clearInterval(timer);
   }, [allScenes.length, isVideoFullscreen]);
 
-  // Initialize hardware
+  // Initialize hardware — raise block on project select, lower on exit
   React.useEffect(() => {
-    hardwareService.setProjectLighting(project.id, true);
+    hardwareService.selectProject(project.id);
     return () => {
-      hardwareService.resetAll();
+      hardwareService.deselectProject(project.id);
     };
   }, [project.id]);
 

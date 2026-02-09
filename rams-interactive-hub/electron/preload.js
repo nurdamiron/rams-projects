@@ -7,4 +7,19 @@ contextBridge.exposeInMainWorld('electron', {
   getMediaStats: () => ipcRenderer.invoke('get-media-stats'),
   getDiagnostics: () => ipcRenderer.invoke('get-diagnostics'),
   onOpenAdmin: (callback) => ipcRenderer.on('open-admin', callback),
+
+  // Hardware UDP control via IPC
+  blockUp: (blockNumber) => ipcRenderer.invoke('hardware-block-up', blockNumber),
+  blockDown: (blockNumber) => ipcRenderer.invoke('hardware-block-down', blockNumber),
+  allStop: () => ipcRenderer.invoke('hardware-all-stop'),
+  allDown: () => ipcRenderer.invoke('hardware-all-down'),
+  setLedMode: (mode) => ipcRenderer.invoke('hardware-led-mode', mode),
+  setLedColor: (hexColor) => ipcRenderer.invoke('hardware-led-color', hexColor),
+  setLedBrightness: (brightness) => ipcRenderer.invoke('hardware-led-brightness', brightness),
+  getHardwareStatus: () => ipcRenderer.invoke('hardware-get-status'),
+  setEspIP: (ip) => ipcRenderer.invoke('hardware-set-ip', ip),
+  pingHardware: () => ipcRenderer.invoke('hardware-ping'),
+  sendHardwareCommand: (cmd) => ipcRenderer.invoke('hardware-send-command', cmd),
+  getBlockMapping: () => ipcRenderer.invoke('hardware-get-block-mapping'),
+  setBlockMapping: (mapping) => ipcRenderer.invoke('hardware-set-block-mapping', mapping),
 });
