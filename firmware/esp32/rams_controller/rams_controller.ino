@@ -52,9 +52,15 @@ IPAddress subnet(255, 255, 255, 0);
 #define EFFECT_UPDATE_MS  20        // Частота обновления эффектов
 
 // Serial Communication с Arduino Mega
-#define MEGA1_RX 16  // GPIO16 для RX (подключаем к TX1 Mega)
-#define MEGA1_TX 17  // GPIO17 для TX (подключаем к RX1 Mega)
-HardwareSerial MegaSerial(2); // Используем Serial2
+// MEGA #1: блоки 1-8
+#define MEGA1_RX 16  // GPIO16 для RX (подключаем к TX1 Mega #1)
+#define MEGA1_TX 17  // GPIO17 для TX (подключаем к RX1 Mega #1)
+HardwareSerial Mega1Serial(2); // Используем Serial2
+
+// MEGA #2: блоки 9-15
+#define MEGA2_RX 26  // GPIO26 для RX (подключаем к TX1 Mega #2)
+#define MEGA2_TX 25  // GPIO25 для TX (подключаем к RX1 Mega #2)
+HardwareSerial Mega2Serial(1); // Используем Serial1
 
 // ============================================================================
 // СТРУКТУРЫ ДАННЫХ
@@ -282,12 +288,15 @@ void setupProjects() {
 void setupMegaSerial() {
   Serial.println("[SETUP] Initializing Mega serial communication...");
 
-  // Инициализация Serial2 для связи с Arduino Mega
-  // RX=16, TX=17, baud=115200
-  MegaSerial.begin(115200, SERIAL_8N1, MEGA1_RX, MEGA1_TX);
-  delay(100);
+  // Mega #1 - Serial2 (блоки 1-8)
+  Mega1Serial.begin(115200, SERIAL_8N1, MEGA1_RX, MEGA1_TX);
+  delay(50);
+  Serial.println("[SETUP] Mega #1 serial initialized on GPIO16(RX)/GPIO17(TX) ✓");
 
-  Serial.println("[SETUP] Mega serial initialized on GPIO16(RX)/GPIO17(TX) ✓");
+  // Mega #2 - Serial1 (блоки 9-15)
+  Mega2Serial.begin(115200, SERIAL_8N1, MEGA2_RX, MEGA2_TX);
+  delay(50);
+  Serial.println("[SETUP] Mega #2 serial initialized on GPIO26(RX)/GPIO25(TX) ✓");
 }
 
 // Отправка команды на Arduino Mega
@@ -300,28 +309,60 @@ bool sendToMega(int blockNum, String action, int duration) {
   String jsonString;
   serializeJson(doc, jsonString);
 
-  MegaSerial.println(jsonString);
+  // Выбираем нужную Mega по номеру блока
+  if (blockNum >= 1 && blockNum <= 8) {
+    // Блоки 1-8 → Mega #1
+    Mega1Serial.println(jsonString);
+    Serial.print("[MEGA #1] Sent: ");
+    Serial.println(jsonString);
+    return true;
+  }
+  else if (blockNum >= 9 && blockNum <= 15) {
+    // Блоки 9-15 → Mega #2
+    Mega2Serial.println(jsonString);
+    Serial.print("[MEGA #2] Sent: ");
+    Serial.println(jsonString);
+    return true;
+  }
+  else if (blockNum == 0 && action == "stop") {
+    // Остановить все блоки на ОБЕИХ платах
+    Mega1Serial.println(jsonString);
+    Mega2Serial.println(jsonString);
+    Serial.println("[MEGA ALL] Sent STOP to both Megas");
+    return true;
+  }
 
-  Serial.print("[MEGA] Sent: ");
-  Serial.println(jsonString);
-
-  return true;
+  Serial.print("[ERROR] Invalid block number: ");
+  Serial.println(blockNum);
+  return false;
 }
 
-// Чтение ответов от Mega
+// Чтение ответов от обеих Mega
 void readFromMega() {
-  if (MegaSerial.available()) {
-    String response = MegaSerial.readStringUntil('\n');
+  // Читаем от Mega #1
+  if (Mega1Serial.available()) {
+    String response = Mega1Serial.readStringUntil('\n');
     response.trim();
 
     if (response.length() > 0) {
-      Serial.print("[MEGA] Response: ");
+      Serial.print("[MEGA #1] Response: ");
       Serial.println(response);
 
       // Можно парсить ответ и обрабатывать статус
       // StaticJsonDocument<256> doc;
       // deserializeJson(doc, response);
       // String status = doc["status"];
+    }
+  }
+
+  // Читаем от Mega #2
+  if (Mega2Serial.available()) {
+    String response = Mega2Serial.readStringUntil('\n');
+    response.trim();
+
+    if (response.length() > 0) {
+      Serial.print("[MEGA #2] Response: ");
+      Serial.println(response);
     }
   }
 }

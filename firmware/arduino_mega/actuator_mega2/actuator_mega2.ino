@@ -1,100 +1,51 @@
 /**
- * RAMS Screen - MEGA ACTUATOR CONTROLLER
+ * RAMS Screen - MEGA #2 ACTUATOR CONTROLLER
  *
- * УПРАВЛЕНИЕ 8 БЛОКАМИ АКТУАТОРОВ ПО КОМАНДАМ ОТ ESP32
+ * УПРАВЛЕНИЕ БЛОКАМИ 9-15 (15 АКТУАТОРОВ)
  *
- * 8 блоков по 2 актуатора + 1 дополнительный актуатор в блоке 8
- * Всего 17 актуаторов, 33 пина (22-53 + пин 2)
+ * 7 блоков: 6 блоков по 2 актуатора + 1 блок (15-й) с 3 актуаторами
+ * Всего 15 актуаторов, 30 пинов (22-53, исключая 48-49)
  * ИНВЕРСНАЯ ЛОГИКА: LOW = включено, HIGH = выключено
  *
- * БЛОК 1: пины 22, 23, 24, 25 (2 актуатора)
- * БЛОК 2: пины 26, 27, 28, 29 (2 актуатора)
- * БЛОК 3: пины 30, 31, 32, 33 (2 актуатора)
- * БЛОК 4: пины 34, 35, 36, 37 (2 актуатора)
- * БЛОК 5: пины 38, 39, 40, 41 (2 актуатора)
- * БЛОК 6: пины 50, 51, 52, 53 (2 актуатора - ФИЗИЧЕСКИ ЗАПАЯН)
- * БЛОК 7: пины 42, 43, 44, 45 (2 актуатора)
- * БЛОК 8: пины 46, 47, 48, 49, 2 (2 актуатора + 1 дополнительный)
+ * БЛОК 9:  пины 22, 23, 24, 25 (2 актуатора)
+ * БЛОК 10: пины 26, 27, 28, 29 (2 актуатора)
+ * БЛОК 11: пины 30, 31, 32, 33 (2 актуатора)
+ * БЛОК 12: пины 34, 35, 36, 37 (2 актуатора)
+ * БЛОК 13: пины 38, 39, 40, 41 (2 актуатора)
+ * БЛОК 14: пины 50, 51, 52, 53 (2 актуатора - ФИЗИЧЕСКИ ЗАПАЯН)
+ * БЛОК 15: пины 42, 43, 44, 45, 46, 47 (3 актуатора - 6 пинов)
  *
  * СВЯЗЬ С ESP32:
  * - Serial1 (TX1=18, RX1=19) → ESP32
  * - Формат команды: JSON строка с \n
- *   {"block":1,"action":"up","duration":12000}
- *   {"block":2,"action":"down","duration":12000}
+ *   {"block":9,"action":"up","duration":12000}
+ *   {"block":15,"action":"down","duration":12000}
  *   {"block":0,"action":"stop"}  // 0 = все блоки
  */
 
 #include <ArduinoJson.h>
 
 #define MOVE_DURATION 12000  // Время движения по умолчанию (12 секунд)
-#define PAUSE_DURATION 2000  // Пауза между блоками (2 секунды)
 
-// Таймауты для автоматической остановки
-unsigned long blockTimers[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-int blockDurations[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
-// Функция для теста одного блока
-void testBlock(int blockNum, int pin1, int pin2, int pin3, int pin4) {
-  Serial.print("\n[BLOCK ");
-  Serial.print(blockNum);
-  Serial.print("] Pins ");
-  Serial.print(pin1);
-  Serial.print(",");
-  Serial.print(pin2);
-  Serial.print(",");
-  Serial.print(pin3);
-  Serial.print(",");
-  Serial.print(pin4);
-  Serial.println(" (2 actuators)");
-
-  // ОБА АКТУАТОРА ВВЕРХ
-  Serial.println("  → BOTH UP (12 sec)");
-  digitalWrite(pin1, LOW);    // Актуатор 1 вверх
-  digitalWrite(pin2, HIGH);
-  digitalWrite(pin3, LOW);    // Актуатор 2 вверх
-  digitalWrite(pin4, HIGH);
-  delay(MOVE_DURATION);
-
-  // СТОП
-  digitalWrite(pin1, HIGH);
-  digitalWrite(pin2, HIGH);
-  digitalWrite(pin3, HIGH);
-  digitalWrite(pin4, HIGH);
-  Serial.println("  → STOP");
-  delay(PAUSE_DURATION);
-
-  // ОБА АКТУАТОРА ВНИЗ
-  Serial.println("  → BOTH DOWN (12 sec)");
-  digitalWrite(pin1, HIGH);
-  digitalWrite(pin2, LOW);    // Актуатор 1 вниз
-  digitalWrite(pin3, HIGH);
-  digitalWrite(pin4, LOW);    // Актуатор 2 вниз
-  delay(MOVE_DURATION);
-
-  // СТОП
-  digitalWrite(pin1, HIGH);
-  digitalWrite(pin2, HIGH);
-  digitalWrite(pin3, HIGH);
-  digitalWrite(pin4, HIGH);
-  Serial.println("  → STOP");
-  delay(PAUSE_DURATION);
-}
+// Таймауты для автоматической остановки (блоки 9-15 = индексы 0-6)
+unsigned long blockTimers[7] = {0, 0, 0, 0, 0, 0, 0};
+int blockDurations[7] = {0, 0, 0, 0, 0, 0, 0};
 
 // Маппинг блоков на пины
 struct Block {
-  int pin1, pin2, pin3, pin4, pin5; // pin5 только для блока 8
-  bool hasExtraActuator; // true только для блока 8
+  int blockNum;  // Номер блока (9-15)
+  int pin1, pin2, pin3, pin4, pin5, pin6;
+  bool hasThirdActuator; // true только для блока 15
 };
 
-Block blocks[8] = {
-  {22, 23, 24, 25, -1, false},  // Блок 1
-  {26, 27, 28, 29, -1, false},  // Блок 2
-  {30, 31, 32, 33, -1, false},  // Блок 3
-  {34, 35, 36, 37, -1, false},  // Блок 4
-  {38, 39, 40, 41, -1, false},  // Блок 5
-  {50, 51, 52, 53, -1, false},  // Блок 6 (ФИЗИЧЕСКИЕ ПИНЫ)
-  {42, 43, 44, 45, -1, false},  // Блок 7
-  {46, 47, 48, 49, 2, true}     // Блок 8 + дополнительный пин 2
+Block blocks[7] = {
+  {9,  22, 23, 24, 25, -1, -1, false},  // Блок 9
+  {10, 26, 27, 28, 29, -1, -1, false},  // Блок 10
+  {11, 30, 31, 32, 33, -1, -1, false},  // Блок 11
+  {12, 34, 35, 36, 37, -1, -1, false},  // Блок 12
+  {13, 38, 39, 40, 41, -1, -1, false},  // Блок 13
+  {14, 50, 51, 52, 53, -1, -1, false},  // Блок 14 (ФИЗИЧЕСКИ ЗАПАЯН)
+  {15, 42, 43, 44, 45, 46, 47, true}    // Блок 15 (3 актуатора)
 };
 
 void setup() {
@@ -106,73 +57,33 @@ void setup() {
   delay(100);
 
   Serial.println("\n========================================");
-  Serial.println("  RAMS MEGA ACTUATOR CONTROLLER");
-  Serial.println("  17 Actuators (16 + 1 extra)");
-  Serial.println("  Arduino Mega - Pins 2,22-53");
+  Serial.println("  RAMS MEGA #2 ACTUATOR CONTROLLER");
+  Serial.println("  Blocks 9-15 (15 Actuators)");
+  Serial.println("  Arduino Mega - Pins 22-47,50-53");
   Serial.println("  INVERSE LOGIC (LOW=ON, HIGH=OFF)");
   Serial.println("  Serial1 (TX1=18, RX1=19) ↔ ESP32");
   Serial.println("========================================\n");
 
-  // Настройка всех пинов от 22 до 53
-  for (int pin = 22; pin <= 53; pin++) {
+  // Настройка пинов 22-47
+  for (int pin = 22; pin <= 47; pin++) {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, HIGH); // Все выключены (HIGH = OFF)
   }
 
-  // Дополнительный пин для блока 8 (17-й актуатор)
-  pinMode(2, OUTPUT);
-  digitalWrite(2, HIGH); // Выключен
+  // Настройка пинов 50-53 (блок 14)
+  for (int pin = 50; pin <= 53; pin++) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, HIGH); // Все выключены (HIGH = OFF)
+  }
 
-  Serial.println("[INIT] 33 pins (2,22-53) initialized (all OFF)");
-  Serial.println("[INIT] 8 blocks (Block 8 has extra actuator on pin 2)");
+  Serial.println("[INIT] 30 pins (22-47,50-53) initialized (all OFF)");
+  Serial.println("[INIT] 7 blocks ready (Block 15 has 3 actuators)");
   Serial.println("[INIT] Serial1 ready for ESP32 commands");
   Serial.println("\n[READY] Waiting for commands from ESP32...");
   Serial.println("========================================\n");
 
   // Отправляем подтверждение ESP32
-  Serial1.println("{\"status\":\"ready\",\"blocks\":8}");
-}
-
-// Функция для движения блока ВВЕРХ
-void blockUp(int blockNum, int pin1, int pin2, int pin3, int pin4) {
-  Serial.print("[BLOCK ");
-  Serial.print(blockNum);
-  Serial.println("] → UP");
-
-  // Отправляем команду ESP32
-  Serial1.print("B");
-  Serial1.print(blockNum);
-  Serial1.println("U");
-
-  digitalWrite(pin1, LOW);
-  digitalWrite(pin2, HIGH);
-  digitalWrite(pin3, LOW);
-  digitalWrite(pin4, HIGH);
-}
-
-// Функция для движения блока ВНИЗ
-void blockDown(int blockNum, int pin1, int pin2, int pin3, int pin4) {
-  Serial.print("[BLOCK ");
-  Serial.print(blockNum);
-  Serial.println("] → DOWN");
-
-  // Отправляем команду ESP32
-  Serial1.print("B");
-  Serial1.print(blockNum);
-  Serial1.println("D");
-
-  digitalWrite(pin1, HIGH);
-  digitalWrite(pin2, LOW);
-  digitalWrite(pin3, HIGH);
-  digitalWrite(pin4, LOW);
-}
-
-// Функция для остановки блока
-void blockStop(int pin1, int pin2, int pin3, int pin4) {
-  digitalWrite(pin1, HIGH);
-  digitalWrite(pin2, HIGH);
-  digitalWrite(pin3, HIGH);
-  digitalWrite(pin4, HIGH);
+  Serial1.println("{\"status\":\"ready\",\"mega\":2,\"blocks\":7}");
 }
 
 void loop() {
@@ -246,14 +157,14 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
     return true;
   }
 
-  // Проверка диапазона блока (1-8)
-  if (blockNum < 1 || blockNum > 8) {
-    Serial.print("[ERROR] Invalid block number: ");
+  // Проверка диапазона блока (9-15)
+  if (blockNum < 9 || blockNum > 15) {
+    Serial.print("[ERROR] Invalid block number for Mega #2: ");
     Serial.println(blockNum);
     return false;
   }
 
-  int index = blockNum - 1; // Индекс массива (0-7)
+  int index = blockNum - 9; // Индекс массива (0-6 для блоков 9-15)
   Block b = blocks[index];
 
   // UP - движение вверх
@@ -263,7 +174,7 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
     Serial.print("] → UP (");
     Serial.print(duration);
     Serial.print("ms, ");
-    Serial.print(b.hasExtraActuator ? 3 : 2);
+    Serial.print(b.hasThirdActuator ? 3 : 2);
     Serial.println(" actuators)");
 
     blockUpByPins(&b);
@@ -282,7 +193,7 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
     Serial.print("] → DOWN (");
     Serial.print(duration);
     Serial.print("ms, ");
-    Serial.print(b.hasExtraActuator ? 3 : 2);
+    Serial.print(b.hasThirdActuator ? 3 : 2);
     Serial.println(" actuators)");
 
     blockDownByPins(&b);
@@ -322,11 +233,11 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
 void checkBlockTimers() {
   unsigned long now = millis();
 
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 7; i++) {
     // Если таймер активен и время вышло
     if (blockTimers[i] > 0 && (now - blockTimers[i] >= blockDurations[i])) {
       Serial.print("[AUTO-STOP] Block ");
-      Serial.println(i + 1);
+      Serial.println(i + 9);
 
       Block* b = &blocks[i];
       blockStopByPins(b);
@@ -337,7 +248,7 @@ void checkBlockTimers() {
 
       // Уведомить ESP32
       Serial1.print("{\"status\":\"stopped\",\"block\":");
-      Serial1.print(i + 1);
+      Serial1.print(i + 9);
       Serial1.println(",\"reason\":\"timeout\"}");
     }
   }
@@ -354,9 +265,10 @@ void blockUpByPins(Block* b) {
   digitalWrite(b->pin3, LOW);   // Актуатор 2 вверх
   digitalWrite(b->pin4, HIGH);
 
-  // Если есть дополнительный актуатор (только блок 8)
-  if (b->hasExtraActuator && b->pin5 != -1) {
-    digitalWrite(b->pin5, LOW);   // Дополнительный актуатор вверх
+  // Если есть 3-й актуатор (только блок 15)
+  if (b->hasThirdActuator && b->pin5 != -1) {
+    digitalWrite(b->pin5, LOW);   // Актуатор 3 вверх
+    digitalWrite(b->pin6, HIGH);
   }
 }
 
@@ -367,9 +279,10 @@ void blockDownByPins(Block* b) {
   digitalWrite(b->pin3, HIGH);
   digitalWrite(b->pin4, LOW);   // Актуатор 2 вниз
 
-  // Если есть дополнительный актуатор (только блок 8)
-  if (b->hasExtraActuator && b->pin5 != -1) {
-    digitalWrite(b->pin5, LOW);   // Дополнительный актуатор вниз
+  // Если есть 3-й актуатор (только блок 15)
+  if (b->hasThirdActuator && b->pin5 != -1) {
+    digitalWrite(b->pin5, HIGH);
+    digitalWrite(b->pin6, LOW);   // Актуатор 3 вниз
   }
 }
 
@@ -380,15 +293,16 @@ void blockStopByPins(Block* b) {
   digitalWrite(b->pin3, HIGH);
   digitalWrite(b->pin4, HIGH);
 
-  // Если есть дополнительный актуатор (только блок 8)
-  if (b->hasExtraActuator && b->pin5 != -1) {
-    digitalWrite(b->pin5, HIGH);   // Дополнительный актуатор стоп
+  // Если есть 3-й актуатор (только блок 15)
+  if (b->hasThirdActuator && b->pin5 != -1) {
+    digitalWrite(b->pin5, HIGH);
+    digitalWrite(b->pin6, HIGH);
   }
 }
 
 // Остановка всех блоков
 void stopAllBlocks() {
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 7; i++) {
     Block* b = &blocks[i];
     blockStopByPins(b);
     blockTimers[i] = 0;
