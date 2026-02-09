@@ -23,6 +23,12 @@ RAMS-Hub-Windows/
 rams-interactive-hub/public/projects/*/videos/
 rams-interactive-hub/public/projects/*/images/
 
+# Release packages and media
+RAMS-Release-Light/
+RAMS-Release-v1/
+public/images/
+public/projects/
+
 # OS files
 .DS_Store
 Thumbs.db
