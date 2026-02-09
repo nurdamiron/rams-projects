@@ -44,14 +44,19 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   // State
   const [activeSceneIndex, setActiveSceneIndex] = React.useState(0);
   const activeScene = allScenes[activeSceneIndex];
-  const [isMuted, setIsMuted] = React.useState(true);
-  const [isVideoFullscreen, setIsVideoFullscreen] = React.useState(false);
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const fullscreenVideoRef = React.useRef<HTMLVideoElement>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
+  const [tvConnected, setTvConnected] = React.useState(false);
 
   // Check if project has video
   const videoScene = project.scenes.find(s => s.video);
   const hasVideo = !!videoScene;
+
+  // Check TV status on mount
+  React.useEffect(() => {
+    hardwareService.tvGetStatus().then((status) => {
+      setTvConnected(status.connected);
+    });
+  }, []);
 
   // Navigation
   const goToPrevScene = () => {
@@ -64,18 +69,20 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
 
   // Auto slideshow (5 seconds interval)
   React.useEffect(() => {
-    if (allScenes.length <= 1 || isVideoFullscreen) return;
+    if (allScenes.length <= 1 || isVideoPlaying) return;
     const timer = setInterval(() => {
       setActiveSceneIndex((prev) => (prev < allScenes.length - 1 ? prev + 1 : 0));
     }, 5000);
     return () => clearInterval(timer);
-  }, [allScenes.length, isVideoFullscreen]);
+  }, [allScenes.length, isVideoPlaying]);
 
   // Initialize hardware — raise block on project select, lower on exit
   React.useEffect(() => {
     hardwareService.selectProject(project.id);
     return () => {
       hardwareService.deselectProject(project.id);
+      // Stop TV video when leaving project
+      hardwareService.tvStopVideo();
     };
   }, [project.id]);
 
@@ -241,11 +248,27 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
             </motion.div>
           </AnimatePresence>
 
-          {/* Video Button */}
+          {/* Video Button — sends to LG TV */}
           {hasVideo && (
             <motion.button
-              onClick={() => setIsVideoFullscreen(true)}
-              className="absolute bottom-10 left-10 px-10 py-5 bg-primary text-white rounded-full font-black text-xl flex items-center gap-4 shadow-[0_20px_50px_rgba(200,161,97,0.4)] group overflow-hidden"
+              onClick={async () => {
+                if (isVideoPlaying) {
+                  await hardwareService.tvStopVideo();
+                  setIsVideoPlaying(false);
+                } else {
+                  const videoPath = videoScene!.video!;
+                  const sent = await hardwareService.tvPlayVideo(videoPath);
+                  if (sent) {
+                    setIsVideoPlaying(true);
+                  }
+                }
+              }}
+              className={cn(
+                "absolute bottom-10 left-10 px-10 py-5 rounded-full font-black text-xl flex items-center gap-4 group overflow-hidden",
+                isVideoPlaying
+                  ? "bg-red-500 text-white shadow-[0_20px_50px_rgba(239,68,68,0.4)]"
+                  : "bg-primary text-white shadow-[0_20px_50px_rgba(200,161,97,0.4)]"
+              )}
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.6, delay: 1 }}
@@ -253,16 +276,35 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
               whileTap={{ scale: 0.95 }}
             >
               {/* Animated background reflection */}
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
                 animate={{ x: ['100%', '-100%'] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
               />
               <span className="relative flex items-center gap-4">
-                <Icon name="play_circle" className="!text-3xl" />
-                <span className="uppercase tracking-widest">{t("video")}</span>
+                <Icon name={isVideoPlaying ? "stop_circle" : "play_circle"} className="!text-3xl" />
+                <span className="uppercase tracking-widest">
+                  {isVideoPlaying ? t("stopVideo") : t("video")}
+                </span>
               </span>
             </motion.button>
+          )}
+
+          {/* TV Playing Indicator */}
+          {isVideoPlaying && (
+            <motion.div
+              className="absolute top-6 right-6 flex items-center gap-3 px-5 py-3 bg-black/60 backdrop-blur-md rounded-full border border-white/20"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <motion.div
+                className="w-3 h-3 rounded-full bg-red-500"
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+              <span className="text-white text-sm font-semibold">{t("playingOnTV")}</span>
+            </motion.div>
           )}
 
           {/* Navigation Arrows */}
@@ -316,35 +358,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
         </div>
       </motion.div>
 
-      {/* Fullscreen Video Overlay */}
-      <AnimatePresence>
-        {isVideoFullscreen && videoScene && (
-          <motion.div
-            className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.5, ease: easings.smooth }}
-          >
-            <motion.button
-              onClick={() => setIsVideoFullscreen(false)}
-              className="absolute top-10 right-10 w-16 h-16 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white z-10"
-              whileHover={{ scale: 1.1, rotate: 90 }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <Icon name="close" size="xl" />
-            </motion.button>
-            <video
-              ref={fullscreenVideoRef}
-              className="w-full h-full object-contain"
-              autoPlay
-              controls
-              playsInline
-              src={getMediaUrl(videoScene.video)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Video is now played on LG TV — no local fullscreen overlay */}
     </motion.div>
   );
 };

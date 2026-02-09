@@ -614,6 +614,44 @@ export const translations = {
     en: "Block",
   },
 
+  // TV
+  tvSettings: {
+    ru: "LG TV (SSAP)",
+    kk: "LG TV (SSAP)",
+    tr: "LG TV (SSAP)",
+    en: "LG TV (SSAP)",
+  },
+  tvConnect: {
+    ru: "Подключить",
+    kk: "Қосу",
+    tr: "Baglan",
+    en: "Connect",
+  },
+  tvDisconnect: {
+    ru: "Отключить",
+    kk: "Ажырату",
+    tr: "Kes",
+    en: "Disconnect",
+  },
+  tvHint: {
+    ru: "Включите Dev Mode на LG TV. При первом подключении подтвердите на телевизоре.",
+    kk: "LG TV-де Dev Mode қосыңыз. Алғашқы қосылуда теледидарда растаңыз.",
+    tr: "LG TV'de Dev Mode'u acin. Ilk baglantigda TV'de onaylayin.",
+    en: "Enable Dev Mode on LG TV. Confirm on the TV when connecting for the first time.",
+  },
+  playingOnTV: {
+    ru: "Воспроизводится на TV",
+    kk: "TV-де ойнатылуда",
+    tr: "TV'de oynatiliyor",
+    en: "Playing on TV",
+  },
+  stopVideo: {
+    ru: "СТОП",
+    kk: "ТОҚТАТУ",
+    tr: "DURDUR",
+    en: "STOP",
+  },
+
   // Short labels for project cards
   floorsShort: {
     ru: "эт.",

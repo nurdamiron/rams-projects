@@ -143,4 +143,36 @@ export const hardwareService = {
     }
     return success;
   },
+
+  // ===================== TV Methods =====================
+
+  async tvConnect(): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.tvConnect();
+  },
+
+  async tvDisconnect(): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.tvDisconnect();
+  },
+
+  async tvPlayVideo(videoPath: string): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.tvPlayVideo(videoPath);
+  },
+
+  async tvStopVideo(): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.tvStopVideo();
+  },
+
+  async tvGetStatus() {
+    const hw = HardwareIPCService.getInstance();
+    return hw.tvGetStatus();
+  },
+
+  async tvSetIP(ip: string): Promise<boolean> {
+    const hw = HardwareIPCService.getInstance();
+    return hw.tvSetIP(ip);
+  },
 };

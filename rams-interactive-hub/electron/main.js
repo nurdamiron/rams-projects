@@ -2,6 +2,9 @@ const { app, BrowserWindow, globalShortcut, protocol, ipcMain, dialog } = requir
 const path = require('path');
 const fs = require('fs');
 const dgram = require('dgram');
+const http = require('http');
+const os = require('os');
+const WebSocket = require('ws');
 
 // Register custom schemes
 protocol.registerSchemesAsPrivileged([
@@ -49,6 +52,17 @@ const hardwareConfigPath = path.join(app.getPath('userData'), 'hardware-config.j
 let udpClient = null;
 let espIP = '192.168.1.100';
 let blockMapping = {}; // { galleryCardId: physicalBlockNumber } — custom overrides
+
+// ===================== LG TV SSAP CLIENT =====================
+const MEDIA_SERVER_PORT = 8888;
+const SSAP_PORT = 3000;
+
+let tvIP = '';
+let tvClientKey = '';
+let tvWs = null;
+let tvConnected = false;
+let mediaServer = null;
+let ssapRequestId = 1;
 let currentBlock = null;
 let lastCommandTime = 0;
 let debounceTimer = null;
@@ -63,7 +77,9 @@ function loadHardwareConfig() {
       const config = JSON.parse(fs.readFileSync(hardwareConfigPath, 'utf8'));
       if (config.espIP) espIP = config.espIP;
       if (config.blockMapping) blockMapping = config.blockMapping;
-      log(`[UDP] Loaded config: IP=${espIP}, mapping keys=${Object.keys(blockMapping).length}`);
+      if (config.tvIP) tvIP = config.tvIP;
+      if (config.tvClientKey) tvClientKey = config.tvClientKey;
+      log(`[UDP] Loaded config: ESP=${espIP}, TV=${tvIP || 'not set'}, mapping keys=${Object.keys(blockMapping).length}`);
     }
   } catch (e) {
     log(`[UDP] Failed to load config: ${e.message}`);
@@ -72,10 +88,10 @@ function loadHardwareConfig() {
 
 function saveHardwareConfig() {
   try {
-    fs.writeFileSync(hardwareConfigPath, JSON.stringify({ espIP, blockMapping }, null, 2));
-    log(`[UDP] Config saved: IP=${espIP}, mapping keys=${Object.keys(blockMapping).length}`);
+    fs.writeFileSync(hardwareConfigPath, JSON.stringify({ espIP, blockMapping, tvIP, tvClientKey }, null, 2));
+    log(`[Config] Saved: ESP=${espIP}, TV=${tvIP || 'not set'}`);
   } catch (e) {
-    log(`[UDP] Failed to save config: ${e.message}`);
+    log(`[Config] Failed to save: ${e.message}`);
   }
 }
 
@@ -202,6 +218,247 @@ function cleanupUdp() {
 
 // ===================== END UDP =====================
 
+// ===================== LG TV SSAP FUNCTIONS =====================
+
+// Get local IPv4 address (for media server URL)
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+// Start HTTP media server to serve video files to TV
+function startMediaServer() {
+  if (mediaServer) return;
+
+  const videoMime = {
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mov': 'video/quicktime',
+    '.mkv': 'video/x-matroska',
+  };
+
+  mediaServer = http.createServer((req, res) => {
+    const mediaRoot = getMediaRoot();
+    const urlPath = decodeURIComponent(req.url.split('?')[0]);
+    const filePath = path.join(mediaRoot, urlPath);
+
+    // Security: prevent directory traversal
+    if (!path.normalize(filePath).startsWith(mediaRoot)) {
+      log(`[MediaServer] Blocked traversal: ${filePath}`);
+      res.writeHead(403);
+      res.end();
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      log(`[MediaServer] Not found: ${filePath}`);
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+
+    const stat = fs.statSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = videoMime[ext] || 'application/octet-stream';
+
+    // Range request support (required for video seeking on TV)
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+      const chunkSize = end - start + 1;
+      const stream = fs.createReadStream(filePath, { start, end });
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+      });
+      stream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': stat.size,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+      });
+      fs.createReadStream(filePath).pipe(res);
+    }
+
+    log(`[MediaServer] ${req.method} ${urlPath} → ${res.statusCode}`);
+  });
+
+  mediaServer.listen(MEDIA_SERVER_PORT, '0.0.0.0', () => {
+    log(`[MediaServer] Started on http://0.0.0.0:${MEDIA_SERVER_PORT}`);
+  });
+
+  mediaServer.on('error', (err) => {
+    log(`[MediaServer] Error: ${err.message}`);
+  });
+}
+
+// Connect to LG TV via SSAP WebSocket
+function connectToTV() {
+  if (tvWs) {
+    try { tvWs.close(); } catch (e) {}
+    tvWs = null;
+    tvConnected = false;
+  }
+
+  if (!tvIP) {
+    log('[TV] No TV IP configured');
+    return false;
+  }
+
+  try {
+    log(`[TV] Connecting to ws://${tvIP}:${SSAP_PORT}...`);
+    tvWs = new WebSocket(`ws://${tvIP}:${SSAP_PORT}`);
+
+    tvWs.on('open', () => {
+      log(`[TV] WebSocket connected to ${tvIP}:${SSAP_PORT}`);
+      // Send SSAP registration
+      const registerMsg = {
+        type: 'register',
+        id: `reg_${ssapRequestId++}`,
+        payload: {
+          pairingType: 'PROMPT',
+          'manifest': {
+            permissions: [
+              'LAUNCH', 'LAUNCH_WEBAPP', 'CONTROL_AUDIO',
+              'CONTROL_INPUT_MEDIA_PLAYBACK', 'READ_INSTALLED_APPS',
+              'CONTROL_POWER', 'READ_TV_CURRENT_TIME',
+              'CONTROL_DISPLAY', 'CONTROL_INPUT_TV',
+            ],
+          },
+          ...(tvClientKey ? { 'client-key': tvClientKey } : {}),
+        },
+      };
+      tvWs.send(JSON.stringify(registerMsg));
+      log('[TV] Registration request sent' + (tvClientKey ? ' (with saved key)' : ' (first time — check TV for prompt)'));
+    });
+
+    tvWs.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        log(`[TV] SSAP response: type=${msg.type}, id=${msg.id}`);
+
+        if (msg.type === 'registered') {
+          tvConnected = true;
+          if (msg.payload && msg.payload['client-key']) {
+            tvClientKey = msg.payload['client-key'];
+            saveHardwareConfig();
+            log(`[TV] Paired! Client key saved.`);
+          }
+          // Notify renderer
+          if (mainWindow) {
+            mainWindow.webContents.send('tv-status-changed', { connected: true, ip: tvIP });
+          }
+        }
+
+        if (msg.type === 'error') {
+          log(`[TV] SSAP Error: ${msg.error}`);
+        }
+      } catch (e) {
+        log(`[TV] Parse error: ${e.message}`);
+      }
+    });
+
+    tvWs.on('close', () => {
+      log('[TV] WebSocket disconnected');
+      tvConnected = false;
+      tvWs = null;
+      if (mainWindow) {
+        mainWindow.webContents.send('tv-status-changed', { connected: false, ip: tvIP });
+      }
+    });
+
+    tvWs.on('error', (err) => {
+      log(`[TV] WebSocket error: ${err.message}`);
+      tvConnected = false;
+    });
+
+    return true;
+  } catch (e) {
+    log(`[TV] Connection failed: ${e.message}`);
+    return false;
+  }
+}
+
+// Send SSAP request to TV
+function sendSSAP(uri, payload = {}) {
+  return new Promise((resolve) => {
+    if (!tvWs || tvWs.readyState !== WebSocket.OPEN) {
+      log(`[TV] Cannot send — not connected`);
+      resolve(false);
+      return;
+    }
+
+    const msg = {
+      type: 'request',
+      id: `req_${ssapRequestId++}`,
+      uri,
+      payload,
+    };
+
+    try {
+      tvWs.send(JSON.stringify(msg));
+      log(`[TV] SSAP → ${uri}`);
+      resolve(true);
+    } catch (e) {
+      log(`[TV] Send error: ${e.message}`);
+      resolve(false);
+    }
+  });
+}
+
+// Play video on LG TV
+async function playVideoOnTV(videoRelPath) {
+  // Ensure media server is running
+  startMediaServer();
+
+  const localIP = getLocalIP();
+  const videoUrl = `http://${localIP}:${MEDIA_SERVER_PORT}/${videoRelPath}`;
+  log(`[TV] Playing on TV: ${videoUrl}`);
+
+  return sendSSAP('ssap://media.viewer/open', {
+    url: videoUrl,
+    title: 'RAMS',
+    description: '',
+    mimeType: 'video/mp4',
+    loop: false,
+  });
+}
+
+// Stop video on TV
+function stopVideoOnTV() {
+  return sendSSAP('ssap://media.viewer/close');
+}
+
+// Cleanup TV resources
+function cleanupTV() {
+  if (tvWs) {
+    try { tvWs.close(); } catch (e) {}
+    tvWs = null;
+  }
+  if (mediaServer) {
+    try { mediaServer.close(); } catch (e) {}
+    mediaServer = null;
+  }
+  tvConnected = false;
+  log('[TV] Cleanup complete');
+}
+
+// ===================== END LG TV =====================
+
 // Get media root path - searches multiple locations
 function getMediaRoot() {
   const isDev = !app.isPackaged;
@@ -323,6 +580,12 @@ app.whenReady().then(() => {
 
   // Initialize UDP client for hardware communication
   initUdp();
+
+  // Start media server and auto-connect to TV if configured
+  startMediaServer();
+  if (tvIP) {
+    setTimeout(() => connectToTV(), 2000);
+  }
 
   // Register app:// protocol to serve static files (solves absolute path issue)
   const outDir = path.join(__dirname, '..', 'out');
@@ -593,6 +856,48 @@ app.whenReady().then(() => {
     return { success: true };
   });
 
+  // ===================== TV IPC Handlers =====================
+
+  ipcMain.handle('tv-connect', async () => {
+    return connectToTV();
+  });
+
+  ipcMain.handle('tv-disconnect', async () => {
+    if (tvWs) {
+      try { tvWs.close(); } catch (e) {}
+      tvWs = null;
+      tvConnected = false;
+    }
+    return true;
+  });
+
+  ipcMain.handle('tv-play-video', async (_event, videoRelPath) => {
+    return playVideoOnTV(videoRelPath);
+  });
+
+  ipcMain.handle('tv-stop-video', async () => {
+    return stopVideoOnTV();
+  });
+
+  ipcMain.handle('tv-get-status', () => {
+    return { connected: tvConnected, ip: tvIP, hasKey: !!tvClientKey };
+  });
+
+  ipcMain.handle('tv-set-ip', (_event, ip) => {
+    tvIP = ip;
+    saveHardwareConfig();
+    // Reset connection
+    tvConnected = false;
+    tvClientKey = '';
+    if (tvWs) {
+      try { tvWs.close(); } catch (e) {}
+      tvWs = null;
+    }
+    return { success: true, ip: tvIP };
+  });
+
+  // ===================== End TV IPC =====================
+
   // Log all registered protocols
   log('[Protocols] app:// and media:// registered');
 
@@ -627,6 +932,7 @@ app.on('before-quit', () => {
     }
   }
   cleanupUdp();
+  cleanupTV();
   log('=== RAMS Interactive Hub Stopped ===');
   try { logStream.end(); } catch (e) {}
 });

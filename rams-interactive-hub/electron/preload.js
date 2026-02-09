@@ -22,4 +22,13 @@ contextBridge.exposeInMainWorld('electron', {
   sendHardwareCommand: (cmd) => ipcRenderer.invoke('hardware-send-command', cmd),
   getBlockMapping: () => ipcRenderer.invoke('hardware-get-block-mapping'),
   setBlockMapping: (mapping) => ipcRenderer.invoke('hardware-set-block-mapping', mapping),
+
+  // LG TV control via SSAP
+  tvConnect: () => ipcRenderer.invoke('tv-connect'),
+  tvDisconnect: () => ipcRenderer.invoke('tv-disconnect'),
+  tvPlayVideo: (videoPath) => ipcRenderer.invoke('tv-play-video', videoPath),
+  tvStopVideo: () => ipcRenderer.invoke('tv-stop-video'),
+  tvGetStatus: () => ipcRenderer.invoke('tv-get-status'),
+  tvSetIP: (ip) => ipcRenderer.invoke('tv-set-ip', ip),
+  onTvStatusChanged: (callback) => ipcRenderer.on('tv-status-changed', (_event, data) => callback(data)),
 });

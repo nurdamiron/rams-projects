@@ -4,6 +4,12 @@
  * Falls back to no-op when not running in Electron
  */
 
+export interface TVStatus {
+  connected: boolean;
+  ip: string;
+  hasKey: boolean;
+}
+
 interface ElectronAPI {
   isElectron: boolean;
   blockUp: (blockNumber: number) => Promise<boolean>;
@@ -19,6 +25,14 @@ interface ElectronAPI {
   sendHardwareCommand: (cmd: string) => Promise<boolean>;
   getBlockMapping: () => Promise<Record<string, number>>;
   setBlockMapping: (mapping: Record<string, number>) => Promise<{ success: boolean }>;
+  // TV
+  tvConnect: () => Promise<boolean>;
+  tvDisconnect: () => Promise<boolean>;
+  tvPlayVideo: (videoPath: string) => Promise<boolean>;
+  tvStopVideo: () => Promise<boolean>;
+  tvGetStatus: () => Promise<TVStatus>;
+  tvSetIP: (ip: string) => Promise<{ success: boolean; ip: string }>;
+  onTvStatusChanged: (callback: (data: { connected: boolean; ip: string }) => void) => void;
 }
 
 export type BlockMapping = Record<string, number>; // galleryCardId → physical block number
@@ -192,6 +206,85 @@ class HardwareIPCService {
     } catch (e) {
       console.warn("[Hardware] setBlockMapping failed:", e);
       return false;
+    }
+  }
+
+  // ===================== TV Methods =====================
+
+  async tvConnect(): Promise<boolean> {
+    const api = getElectronAPI();
+    if (!api) return false;
+    try {
+      return await api.tvConnect();
+    } catch (e) {
+      console.warn("[TV] connect failed:", e);
+      return false;
+    }
+  }
+
+  async tvDisconnect(): Promise<boolean> {
+    const api = getElectronAPI();
+    if (!api) return false;
+    try {
+      return await api.tvDisconnect();
+    } catch (e) {
+      console.warn("[TV] disconnect failed:", e);
+      return false;
+    }
+  }
+
+  async tvPlayVideo(videoPath: string): Promise<boolean> {
+    const api = getElectronAPI();
+    if (!api) return false;
+    try {
+      return await api.tvPlayVideo(videoPath);
+    } catch (e) {
+      console.warn("[TV] playVideo failed:", e);
+      return false;
+    }
+  }
+
+  async tvStopVideo(): Promise<boolean> {
+    const api = getElectronAPI();
+    if (!api) return false;
+    try {
+      return await api.tvStopVideo();
+    } catch (e) {
+      console.warn("[TV] stopVideo failed:", e);
+      return false;
+    }
+  }
+
+  async tvGetStatus(): Promise<TVStatus> {
+    const api = getElectronAPI();
+    if (!api) return { connected: false, ip: "", hasKey: false };
+    try {
+      return await api.tvGetStatus();
+    } catch (e) {
+      console.warn("[TV] getStatus failed:", e);
+      return { connected: false, ip: "", hasKey: false };
+    }
+  }
+
+  async tvSetIP(ip: string): Promise<boolean> {
+    const api = getElectronAPI();
+    if (!api) return false;
+    try {
+      const result = await api.tvSetIP(ip);
+      return result.success;
+    } catch (e) {
+      console.warn("[TV] setIP failed:", e);
+      return false;
+    }
+  }
+
+  onTvStatusChanged(callback: (data: { connected: boolean; ip: string }) => void): void {
+    const api = getElectronAPI();
+    if (!api) return;
+    try {
+      api.onTvStatusChanged(callback);
+    } catch (e) {
+      console.warn("[TV] onStatusChanged failed:", e);
     }
   }
 }

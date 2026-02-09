@@ -65,6 +65,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [hwLedMode, setHwLedMode] = React.useState("RAINBOW");
   const [hwBlockMapping, setHwBlockMapping] = React.useState<Record<string, number>>({});
   const [hwMappingSaved, setHwMappingSaved] = React.useState(false);
+  // TV state
+  const [tvIP, setTvIP] = React.useState("");
+  const [tvConnected, setTvConnected] = React.useState(false);
+  const [tvSavedIP, setTvSavedIP] = React.useState(false);
+  const [tvConnecting, setTvConnecting] = React.useState(false);
   const { t, language } = useLanguage();
 
   const isElectron = typeof window !== "undefined" && (window as any).electron?.isElectron;
@@ -122,7 +127,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     loadDiag();
   }, [isOpen, activeTab, isElectron]);
 
-  // Load hardware status + block mapping
+  // Load hardware status + block mapping + TV status
   React.useEffect(() => {
     if (!isOpen || activeTab !== "hardware") return;
 
@@ -132,14 +137,24 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setHwConnected(status.connected);
     };
 
+    const loadTvStatus = async () => {
+      const status = await hardwareService.tvGetStatus();
+      setTvIP(status.ip || "");
+      setTvConnected(status.connected);
+    };
+
     const loadMapping = async () => {
       const mapping = await hardwareService.getBlockMapping();
       setHwBlockMapping(mapping);
     };
 
     loadHwStatus();
+    loadTvStatus();
     loadMapping();
-    const interval = setInterval(loadHwStatus, 3000);
+    const interval = setInterval(() => {
+      loadHwStatus();
+      loadTvStatus();
+    }, 3000);
     return () => clearInterval(interval);
   }, [isOpen, activeTab]);
 
@@ -384,6 +399,64 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         {hwConnected ? t("connected") : t("disconnected")}
                       </span>
                     </div>
+                  </div>
+
+                  {/* LG TV Connection */}
+                  <div className="bg-gray-800 rounded-xl p-5">
+                    <h3 className="text-lg font-bold text-white mb-4">{t("tvSettings")}</h3>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`w-4 h-4 rounded-full ${tvConnected ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"}`} />
+                      <span className={`text-sm font-semibold ${tvConnected ? "text-green-400" : "text-red-400"}`}>
+                        LG TV: {tvConnected ? t("connected") : t("disconnected")}
+                      </span>
+                    </div>
+                    <div className="flex gap-3 mb-3">
+                      <input
+                        type="text"
+                        value={tvIP}
+                        onChange={(e) => { setTvIP(e.target.value); setTvSavedIP(false); }}
+                        className="flex-1 bg-gray-700 text-white px-4 py-2.5 rounded-lg border border-gray-600 focus:border-primary focus:outline-none font-mono text-sm"
+                        placeholder="192.168.1.200"
+                      />
+                      <button
+                        onClick={async () => {
+                          await hardwareService.tvSetIP(tvIP);
+                          setTvSavedIP(true);
+                          setTimeout(() => setTvSavedIP(false), 2000);
+                        }}
+                        className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                          tvSavedIP ? "bg-green-500 text-white" : "bg-primary hover:bg-primary/90 text-white"
+                        }`}
+                      >
+                        {tvSavedIP ? t("saved") : t("save")}
+                      </button>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={async () => {
+                          setTvConnecting(true);
+                          await hardwareService.tvConnect();
+                          setTimeout(async () => {
+                            const status = await hardwareService.tvGetStatus();
+                            setTvConnected(status.connected);
+                            setTvConnecting(false);
+                          }, 3000);
+                        }}
+                        disabled={tvConnecting || !tvIP}
+                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:opacity-50 rounded-lg text-white font-semibold text-sm transition-colors"
+                      >
+                        {tvConnecting ? "..." : t("tvConnect")}
+                      </button>
+                      {tvConnected && (
+                        <button
+                          onClick={() => hardwareService.tvDisconnect()}
+                          className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-semibold text-sm transition-colors"
+                        >
+                          {t("tvDisconnect")}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-gray-500 text-xs mt-3">{t("tvHint")}</p>
                   </div>
 
                   {/* IP Configuration */}
