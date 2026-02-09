@@ -3,18 +3,18 @@
  *
  * УПРАВЛЕНИЕ 8 БЛОКАМИ АКТУАТОРОВ ПО КОМАНДАМ ОТ ESP32
  *
- * 8 блоков, каждый блок = 2 актуатора = 4 пина
- * Всего 16 актуаторов, 32 пина (22-53)
+ * 7 блоков по 2 актуатора (4 пина) + 1 блок с 3 актуаторами (6 пинов)
+ * Всего 17 актуаторов, 34 пина (22-53 + 2,3)
  * ИНВЕРСНАЯ ЛОГИКА: LOW = включено, HIGH = выключено
  *
- * БЛОК 1: пины 22, 23, 24, 25
- * БЛОК 2: пины 26, 27, 28, 29
- * БЛОК 3: пины 30, 31, 32, 33
- * БЛОК 4: пины 34, 35, 36, 37
- * БЛОК 5: пины 38, 39, 40, 41
- * БЛОК 6: пины 50, 51, 52, 53 (ФИЗИЧЕСКИ ЗАПАЯН НА ЭТИХ ПИНАХ)
- * БЛОК 7: пины 42, 43, 44, 45
- * БЛОК 8: пины 46, 47, 48, 49
+ * БЛОК 1: пины 22, 23, 24, 25 (2 актуатора)
+ * БЛОК 2: пины 26, 27, 28, 29 (2 актуатора)
+ * БЛОК 3: пины 30, 31, 32, 33 (2 актуатора)
+ * БЛОК 4: пины 34, 35, 36, 37 (2 актуатора)
+ * БЛОК 5: пины 38, 39, 40, 41 (2 актуатора)
+ * БЛОК 6: пины 50, 51, 52, 53 (2 актуатора - ФИЗИЧЕСКИ ЗАПАЯН)
+ * БЛОК 7: пины 42, 43, 44, 45 (2 актуатора)
+ * БЛОК 8: пины 46, 47, 48, 49, 2, 3 (3 актуатора - ОСОБЫЙ!)
  *
  * СВЯЗЬ С ESP32:
  * - Serial1 (TX1=18, RX1=19) → ESP32
@@ -82,18 +82,19 @@ void testBlock(int blockNum, int pin1, int pin2, int pin3, int pin4) {
 
 // Маппинг блоков на пины
 struct Block {
-  int pin1, pin2, pin3, pin4;
+  int pin1, pin2, pin3, pin4, pin5, pin6;
+  int actuatorCount; // 2 или 3
 };
 
 Block blocks[8] = {
-  {22, 23, 24, 25},  // Блок 1
-  {26, 27, 28, 29},  // Блок 2
-  {30, 31, 32, 33},  // Блок 3
-  {34, 35, 36, 37},  // Блок 4
-  {38, 39, 40, 41},  // Блок 5
-  {50, 51, 52, 53},  // Блок 6 (ФИЗИЧЕСКИЕ ПИНЫ)
-  {42, 43, 44, 45},  // Блок 7
-  {46, 47, 48, 49}   // Блок 8
+  {22, 23, 24, 25, -1, -1, 2},  // Блок 1 (2 актуатора)
+  {26, 27, 28, 29, -1, -1, 2},  // Блок 2 (2 актуатора)
+  {30, 31, 32, 33, -1, -1, 2},  // Блок 3 (2 актуатора)
+  {34, 35, 36, 37, -1, -1, 2},  // Блок 4 (2 актуатора)
+  {38, 39, 40, 41, -1, -1, 2},  // Блок 5 (2 актуатора)
+  {50, 51, 52, 53, -1, -1, 2},  // Блок 6 (2 актуатора - ФИЗИЧЕСКИЕ ПИНЫ)
+  {42, 43, 44, 45, -1, -1, 2},  // Блок 7 (2 актуатора)
+  {46, 47, 48, 49, 2, 3, 3}     // Блок 8 (3 актуатора - ОСОБЫЙ!)
 };
 
 void setup() {
@@ -106,8 +107,8 @@ void setup() {
 
   Serial.println("\n========================================");
   Serial.println("  RAMS MEGA ACTUATOR CONTROLLER");
-  Serial.println("  16 Actuators (8 blocks x 2 actuators)");
-  Serial.println("  Arduino Mega - Pins 22 to 53");
+  Serial.println("  17 Actuators (7x2 + 1x3 blocks)");
+  Serial.println("  Arduino Mega - Pins 2,3,22-53");
   Serial.println("  INVERSE LOGIC (LOW=ON, HIGH=OFF)");
   Serial.println("  Serial1 (TX1=18, RX1=19) ↔ ESP32");
   Serial.println("========================================\n");
@@ -118,8 +119,14 @@ void setup() {
     digitalWrite(pin, HIGH); // Все выключены (HIGH = OFF)
   }
 
-  Serial.println("[INIT] 32 pins (22-53) initialized (all OFF)");
-  Serial.println("[INIT] 8 blocks x 2 actuators ready");
+  // Дополнительные пины для блока 8 (3-й актуатор)
+  pinMode(2, OUTPUT);
+  pinMode(3, OUTPUT);
+  digitalWrite(2, HIGH); // Выключен
+  digitalWrite(3, HIGH); // Выключен
+
+  Serial.println("[INIT] 34 pins (2,3,22-53) initialized (all OFF)");
+  Serial.println("[INIT] 8 blocks: 7x2 actuators + 1x3 actuators ready");
   Serial.println("[INIT] Serial1 ready for ESP32 commands");
   Serial.println("\n[READY] Waiting for commands from ESP32...");
   Serial.println("========================================\n");
@@ -257,9 +264,11 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
     Serial.print(blockNum);
     Serial.print("] → UP (");
     Serial.print(duration);
-    Serial.println("ms)");
+    Serial.print("ms, ");
+    Serial.print(b.actuatorCount);
+    Serial.println(" actuators)");
 
-    blockUpByPins(b.pin1, b.pin2, b.pin3, b.pin4);
+    blockUpByPins(&b);
 
     // Установить таймер автоматической остановки
     blockTimers[index] = millis();
@@ -274,9 +283,11 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
     Serial.print(blockNum);
     Serial.print("] → DOWN (");
     Serial.print(duration);
-    Serial.println("ms)");
+    Serial.print("ms, ");
+    Serial.print(b.actuatorCount);
+    Serial.println(" actuators)");
 
-    blockDownByPins(b.pin1, b.pin2, b.pin3, b.pin4);
+    blockDownByPins(&b);
 
     // Установить таймер автоматической остановки
     blockTimers[index] = millis();
@@ -291,7 +302,7 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
     Serial.print(blockNum);
     Serial.println("] → STOP");
 
-    blockStop(b.pin1, b.pin2, b.pin3, b.pin4);
+    blockStopByPins(&b);
 
     // Сбросить таймер
     blockTimers[index] = 0;
@@ -319,8 +330,8 @@ void checkBlockTimers() {
       Serial.print("[AUTO-STOP] Block ");
       Serial.println(i + 1);
 
-      Block b = blocks[i];
-      blockStop(b.pin1, b.pin2, b.pin3, b.pin4);
+      Block* b = &blocks[i];
+      blockStopByPins(b);
 
       // Сбросить таймер
       blockTimers[i] = 0;
@@ -339,26 +350,52 @@ void checkBlockTimers() {
 // ============================================================================
 
 // Движение блока ВВЕРХ (по пинам)
-void blockUpByPins(int pin1, int pin2, int pin3, int pin4) {
-  digitalWrite(pin1, LOW);   // Актуатор 1 вверх
-  digitalWrite(pin2, HIGH);
-  digitalWrite(pin3, LOW);   // Актуатор 2 вверх
-  digitalWrite(pin4, HIGH);
+void blockUpByPins(Block* b) {
+  digitalWrite(b->pin1, LOW);   // Актуатор 1 вверх
+  digitalWrite(b->pin2, HIGH);
+  digitalWrite(b->pin3, LOW);   // Актуатор 2 вверх
+  digitalWrite(b->pin4, HIGH);
+
+  // Если есть 3-й актуатор
+  if (b->actuatorCount == 3 && b->pin5 != -1) {
+    digitalWrite(b->pin5, LOW);   // Актуатор 3 вверх
+    digitalWrite(b->pin6, HIGH);
+  }
 }
 
 // Движение блока ВНИЗ (по пинам)
-void blockDownByPins(int pin1, int pin2, int pin3, int pin4) {
-  digitalWrite(pin1, HIGH);
-  digitalWrite(pin2, LOW);   // Актуатор 1 вниз
-  digitalWrite(pin3, HIGH);
-  digitalWrite(pin4, LOW);   // Актуатор 2 вниз
+void blockDownByPins(Block* b) {
+  digitalWrite(b->pin1, HIGH);
+  digitalWrite(b->pin2, LOW);   // Актуатор 1 вниз
+  digitalWrite(b->pin3, HIGH);
+  digitalWrite(b->pin4, LOW);   // Актуатор 2 вниз
+
+  // Если есть 3-й актуатор
+  if (b->actuatorCount == 3 && b->pin5 != -1) {
+    digitalWrite(b->pin5, HIGH);
+    digitalWrite(b->pin6, LOW);   // Актуатор 3 вниз
+  }
+}
+
+// Остановка блока по пинам
+void blockStopByPins(Block* b) {
+  digitalWrite(b->pin1, HIGH);
+  digitalWrite(b->pin2, HIGH);
+  digitalWrite(b->pin3, HIGH);
+  digitalWrite(b->pin4, HIGH);
+
+  // Если есть 3-й актуатор
+  if (b->actuatorCount == 3 && b->pin5 != -1) {
+    digitalWrite(b->pin5, HIGH);
+    digitalWrite(b->pin6, HIGH);
+  }
 }
 
 // Остановка всех блоков
 void stopAllBlocks() {
   for (int i = 0; i < 8; i++) {
-    Block b = blocks[i];
-    blockStop(b.pin1, b.pin2, b.pin3, b.pin4);
+    Block* b = &blocks[i];
+    blockStopByPins(b);
     blockTimers[i] = 0;
     blockDurations[i] = 0;
   }
