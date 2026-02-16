@@ -15,10 +15,11 @@
     "start": "next start",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
     "postbuild": "rm -rf out/projects",
-    "electron:build": "next build && electron-builder",
-    "electron:build:win": "next build && electron-builder --win",
+    "prebuild:icon": "node scripts/convert-icon.js",
+    "electron:build": "npm run prebuild:icon && next build && electron-builder",
+    "electron:build:win": "npm run prebuild:icon && next build && electron-builder --win",
     "electron:build:mac": "next build && electron-builder --mac",
-    "electron:build:all": "next build && electron-builder --win --mac",
+    "electron:build:all": "npm run prebuild:icon && next build && electron-builder --win --mac",
     "lint": "eslint"
   },
   "build": {
@@ -30,6 +31,7 @@
       "out/**/*",
       "public/*.svg",
       "public/*.png",
+      "public/*.ico",
       "public/images/brand/**/*",
       "public/fonts/**/*",
       "!public/projects/**/*",
@@ -56,8 +58,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "public/icon.png",
-      "uninstallerIcon": "public/icon.png"
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico"
     },
     "win": {
       "target": [
@@ -74,7 +76,7 @@
           ]
         }
       ],
-      "icon": "public/icon.png",
+      "icon": "public/icon.ico",
       "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },
     "mac": {
@@ -124,7 +126,10 @@
     "electron-builder": "^26.4.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "to-ico": "^1.1.5",
     "typescript": "^5",
     "wait-on": "^9.0.3"
   }
