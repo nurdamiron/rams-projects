@@ -20,8 +20,9 @@ export interface ProjectCardProps {
   galleryCard?: GalleryCard;
   projects?: Project[];
   theme?: "light" | "dark";
-  onClick?: (project: Project) => void;
+  onClick?: (projectOrProjects: Project | Project[]) => void;
   index?: number;
+  blockNumber?: string; // Номер блока для отображения
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -31,6 +32,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   theme = "dark",
   onClick,
   index = 0,
+  blockNumber,
 }) => {
   const [isHovered, setIsHovered] = React.useState(false);
   const isDark = theme === "dark";
@@ -74,7 +76,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const logos = allProjects.map(p => getMediaUrl(p.logo || p.image));
 
   const handleClick = () => {
-    if (onClick && mainProject) {
+    if (!onClick) return;
+
+    // Если несколько проектов - передаем массив всех проектов
+    if (isMultiLogo) {
+      onClick(allProjects);
+    } else {
+      // Один проект - передаем один проект
       onClick(mainProject);
     }
   };
@@ -163,6 +171,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             )}
         </div>
 
+
         {/* Info Overlay */}
         <motion.div
           className={cn(
@@ -172,7 +181,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
               : "bg-gradient-to-t from-gray-900/90 via-gray-900/30 to-transparent"
           )}
           initial={{ opacity: 0, y: 20 }}
-          animate={{ 
+          animate={{
             opacity: isHovered ? 1 : 0,
             y: isHovered ? 0 : 20
           }}
@@ -180,7 +189,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         >
           {/* Status Badge */}
           <div className="absolute top-4 left-4">
-            <motion.span 
+            <motion.span
               className={cn(
                 "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-xl",
                 isBuilding

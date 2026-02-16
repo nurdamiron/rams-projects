@@ -41,16 +41,15 @@ process.on('unhandledRejection', (reason) => {
   log(`UNHANDLED REJECTION: ${reason}`);
 });
 
-// ===================== UDP HARDWARE CLIENT =====================
-const UDP_PORT = 4210;
+// ===================== HTTP HARDWARE CLIENT =====================
+const ESP32_PORT = 80;
 const COMMAND_DEBOUNCE_MS = 150;
 const HEALTH_CHECK_INTERVAL = 10000;
-const UDP_TIMEOUT_MS = 3000;
+const BLOCK_DURATION_MS = 10000;  // 10 секунд для UP/DOWN
 
 const hardwareConfigPath = path.join(app.getPath('userData'), 'hardware-config.json');
 
-let udpClient = null;
-let espIP = '192.168.1.100';
+let espIP = '192.168.4.1';  // IP адрес ESP32 Access Point
 let blockMapping = {}; // { galleryCardId: physicalBlockNumber } — custom overrides
 
 // ===================== LG TV SSAP CLIENT =====================
@@ -95,64 +94,68 @@ function saveHardwareConfig() {
   }
 }
 
-// Initialize UDP socket
-function initUdp() {
+// Initialize HTTP client
+function initHttp() {
   loadHardwareConfig();
-
-  udpClient = dgram.createSocket('udp4');
-
-  udpClient.on('error', (err) => {
-    log(`[UDP] Socket error: ${err.message}`);
-  });
-
-  udpClient.on('message', (msg, rinfo) => {
-    const response = msg.toString().trim();
-    log(`[UDP] Response from ${rinfo.address}:${rinfo.port}: ${response}`);
-
-    if (response.startsWith('PONG') || response.startsWith('ACK')) {
-      espConnected = true;
-      lastPong = Date.now();
-    }
-  });
-
-  udpClient.bind(() => {
-    const addr = udpClient.address();
-    log(`[UDP] Client bound to port ${addr.port}`);
-  });
-
+  log(`[HTTP] Initialized - ESP32 at http://${espIP}:${ESP32_PORT}`);
   startHealthCheck();
 }
 
-// Send raw UDP command string
-function sendUdpCommand(cmd) {
+// Send HTTP request to ESP32
+function sendHttpRequest(endpoint, params = {}) {
   return new Promise((resolve) => {
-    if (!udpClient) {
-      log('[UDP] Socket not initialized');
-      resolve(false);
-      return;
-    }
+    const queryString = Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
+    const url = `http://${espIP}:${ESP32_PORT}${endpoint}${queryString ? '?' + queryString : ''}`;
 
-    const buffer = Buffer.from(cmd);
-    udpClient.send(buffer, 0, buffer.length, UDP_PORT, espIP, (err) => {
-      if (err) {
-        log(`[UDP] Send error: ${err.message}`);
-        espConnected = false;
-        resolve(false);
-      } else {
-        log(`[UDP] Sent: ${cmd} → ${espIP}:${UDP_PORT}`);
-        lastCommandTime = Date.now();
-        resolve(true);
-      }
+    const options = {
+      method: 'POST',
+      timeout: 5000,
+    };
+
+    log(`[HTTP] Request: ${url}`);
+
+    const req = http.request(url, options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          log(`[HTTP] Success: ${data}`);
+          espConnected = true;
+          lastPong = Date.now();
+          lastCommandTime = Date.now();
+          resolve(true);
+        } else if (res.statusCode === 429) {
+          log(`[HTTP] Error 429: Maximum 2 blocks active`);
+          resolve(false);
+        } else {
+          log(`[HTTP] Error ${res.statusCode}: ${data}`);
+          resolve(false);
+        }
+      });
     });
+
+    req.on('error', (err) => {
+      log(`[HTTP] Request error: ${err.message}`);
+      espConnected = false;
+      resolve(false);
+    });
+
+    req.on('timeout', () => {
+      log(`[HTTP] Request timeout`);
+      req.destroy();
+      espConnected = false;
+      resolve(false);
+    });
+
+    req.end();
   });
 }
 
-// Debounced block command with automatic DOWN for previous block
-let pendingResolve = null; // Track pending promise so we can resolve it on cancel
+// Debounced block command - with HTTP API
+let pendingResolve = null;
 
 function sendDebouncedBlockCommand(block, action) {
   return new Promise((resolve) => {
-    // If there's a pending debounced command, resolve it as false (cancelled)
     if (debounceTimer) {
       clearTimeout(debounceTimer);
       if (pendingResolve) {
@@ -170,12 +173,12 @@ function sendDebouncedBlockCommand(block, action) {
       debounceTimer = null;
       pendingResolve = null;
 
-      // If raising a new block, lower the previous one first
-      if (action === 'UP' && currentBlock !== null && currentBlock !== block) {
-        await sendUdpCommand(`BLOCK:${currentBlock}:DOWN`);
-      }
-
-      const success = await sendUdpCommand(`BLOCK:${block}:${action}`);
+      // Отправляем HTTP запрос с длительностью 10 секунд
+      const success = await sendHttpRequest('/api/block', {
+        num: block,
+        action: action.toLowerCase(),
+        duration: BLOCK_DURATION_MS
+      });
 
       if (success) {
         if (action === 'UP') currentBlock = block;
@@ -187,20 +190,35 @@ function sendDebouncedBlockCommand(block, action) {
   });
 }
 
-// Health check — ping ESP32 periodically
+// Health check — ping ESP32 периодически через HTTP
 function startHealthCheck() {
   if (healthCheckTimer) clearInterval(healthCheckTimer);
-  healthCheckTimer = setInterval(() => {
-    sendUdpCommand('PING');
-    // Mark as disconnected if no PONG for 30s
+  healthCheckTimer = setInterval(async () => {
+    // Проверяем статус ESP32
+    try {
+      const url = `http://${espIP}:${ESP32_PORT}/api/status`;
+      const req = http.get(url, (res) => {
+        if (res.statusCode === 200) {
+          espConnected = true;
+          lastPong = Date.now();
+        }
+      });
+      req.on('error', () => { espConnected = false; });
+      req.on('timeout', () => { req.destroy(); espConnected = false; });
+      req.setTimeout(3000);
+    } catch (e) {
+      espConnected = false;
+    }
+
+    // Mark as disconnected if no response for 30s
     if (lastPong > 0 && Date.now() - lastPong > 30000) {
       espConnected = false;
     }
   }, HEALTH_CHECK_INTERVAL);
 }
 
-// Cleanup UDP resources
-function cleanupUdp() {
+// Cleanup HTTP resources
+function cleanupHttp() {
   if (debounceTimer) {
     clearTimeout(debounceTimer);
     debounceTimer = null;
@@ -209,11 +227,7 @@ function cleanupUdp() {
     clearInterval(healthCheckTimer);
     healthCheckTimer = null;
   }
-  if (udpClient) {
-    try { udpClient.close(); } catch (e) {}
-    udpClient = null;
-  }
-  log('[UDP] Cleanup complete');
+  log('[HTTP] Cleanup complete');
 }
 
 // ===================== END UDP =====================
@@ -578,8 +592,8 @@ function createWindow() {
 app.whenReady().then(() => {
   log('App ready');
 
-  // Initialize UDP client for hardware communication
-  initUdp();
+  // Initialize HTTP client for hardware communication
+  initHttp();
 
   // Start media server and auto-connect to TV if configured
   startMediaServer();
@@ -920,18 +934,15 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 
-app.on('before-quit', () => {
-  log('[UDP] Sending ALL:STOP before quit...');
-  // Send ALL:STOP synchronously before quitting
-  if (udpClient) {
-    try {
-      const buffer = Buffer.from('ALL:STOP');
-      udpClient.send(buffer, 0, buffer.length, UDP_PORT, espIP);
-    } catch (e) {
-      log(`[UDP] Failed to send ALL:STOP on quit: ${e.message}`);
-    }
+app.on('before-quit', async () => {
+  log('[HTTP] Sending STOP ALL before quit...');
+  // Send STOP ALL via HTTP before quitting
+  try {
+    await sendHttpRequest('/api/stop');
+  } catch (e) {
+    log(`[HTTP] Failed to send STOP on quit: ${e.message}`);
   }
-  cleanupUdp();
+  cleanupHttp();
   cleanupTV();
   log('=== RAMS Interactive Hub Stopped ===');
   try { logStream.end(); } catch (e) {}

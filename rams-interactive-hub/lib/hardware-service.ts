@@ -5,10 +5,16 @@ import { GALLERY_CARDS } from "./data/gallery-config";
  * Hardware Service Facade (Client-Side)
  * Maps project IDs to physical block numbers and delegates to IPC service.
  * Custom block mapping (from admin panel) overrides the default values in gallery-config.
+ *
+ * ОГРАНИЧЕНИЕ: Максимум 2 актуатора одновременно!
  */
 
 // Cached custom mapping — loaded once, updated via setBlockMapping
 let cachedMapping: BlockMapping | null = null;
+
+// Отслеживание активных блоков (максимум 2)
+const activeBlocks = new Set<number>();
+const MAX_ACTIVE_BLOCKS = 2;
 
 /**
  * Resolve project ID → physical block number.
@@ -37,6 +43,7 @@ async function resolveBlockNumber(projectId: string): Promise<number | undefined
 export const hardwareService = {
   /**
    * Select a project — raises the corresponding physical block
+   * ОГРАНИЧЕНИЕ: Максимум 2 актуатора одновременно
    */
   async selectProject(projectId: string): Promise<boolean> {
     const blockNumber = await resolveBlockNumber(projectId);
@@ -44,8 +51,27 @@ export const hardwareService = {
       console.warn(`[HardwareService] No block number found for project: ${projectId}`);
       return false;
     }
+
+    // Проверка: не превышен ли лимит активных блоков
+    if (activeBlocks.has(blockNumber)) {
+      console.log(`[HardwareService] Block ${blockNumber} already active`);
+      return true; // Уже активен
+    }
+
+    if (activeBlocks.size >= MAX_ACTIVE_BLOCKS) {
+      console.warn(`[HardwareService] Maximum ${MAX_ACTIVE_BLOCKS} blocks active! Cannot activate block ${blockNumber}`);
+      return false; // Отклоняем команду
+    }
+
     const hw = HardwareIPCService.getInstance();
-    return hw.blockUp(blockNumber);
+    const success = await hw.blockUp(blockNumber);
+
+    if (success) {
+      activeBlocks.add(blockNumber);
+      console.log(`[HardwareService] Block ${blockNumber} UP - Active: ${activeBlocks.size}/${MAX_ACTIVE_BLOCKS}`);
+    }
+
+    return success;
   },
 
   /**
@@ -54,8 +80,16 @@ export const hardwareService = {
   async deselectProject(projectId: string): Promise<boolean> {
     const blockNumber = await resolveBlockNumber(projectId);
     if (!blockNumber) return false;
+
     const hw = HardwareIPCService.getInstance();
-    return hw.blockDown(blockNumber);
+    const success = await hw.blockDown(blockNumber);
+
+    if (success) {
+      activeBlocks.delete(blockNumber);
+      console.log(`[HardwareService] Block ${blockNumber} DOWN - Active: ${activeBlocks.size}/${MAX_ACTIVE_BLOCKS}`);
+    }
+
+    return success;
   },
 
   /**
@@ -63,7 +97,14 @@ export const hardwareService = {
    */
   async resetAll(): Promise<boolean> {
     const hw = HardwareIPCService.getInstance();
-    return hw.allDown();
+    const success = await hw.allDown();
+
+    if (success) {
+      activeBlocks.clear();
+      console.log(`[HardwareService] ALL DOWN - Active: 0/${MAX_ACTIVE_BLOCKS}`);
+    }
+
+    return success;
   },
 
   /**
@@ -71,7 +112,14 @@ export const hardwareService = {
    */
   async emergencyStop(): Promise<boolean> {
     const hw = HardwareIPCService.getInstance();
-    return hw.allStop();
+    const success = await hw.allStop();
+
+    if (success) {
+      activeBlocks.clear();
+      console.log(`[HardwareService] EMERGENCY STOP - Active: 0/${MAX_ACTIVE_BLOCKS}`);
+    }
+
+    return success;
   },
 
   /**

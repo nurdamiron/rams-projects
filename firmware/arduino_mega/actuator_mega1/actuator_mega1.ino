@@ -1,32 +1,18 @@
 /**
- * RAMS Screen - MEGA #1 ACTUATOR CONTROLLER
+ * RAMS Kinetic Table — Arduino Mega #1 Firmware
+ * Blocks 1–8 (Outer Ring 1–7 + Inner Block 8)
+ * Serial1 (RX=19, TX=18) ← ESP32
+ * Pins 22–53: 16 actuators (2 per block), each H-Bridge uses 2 pins
+ * Total: 8 blocks × 2 actuators × 2 pins = 32 pins
  *
- * УПРАВЛЕНИЕ БЛОКАМИ 1-8 (16 АКТУАТОРОВ)
- *
- * 8 блоков по 2 актуатора каждый
- * Всего 16 актуаторов, 32 пина (22-53)
- * ИНВЕРСНАЯ ЛОГИКА: LOW = включено, HIGH = выключено
- *
- * БЛОК 1: пины 22, 23, 24, 25 (2 актуатора)
- * БЛОК 2: пины 26, 27, 28, 29 (2 актуатора)
- * БЛОК 3: пины 30, 31, 32, 33 (2 актуатора)
- * БЛОК 4: пины 34, 35, 36, 37 (2 актуатора)
- * БЛОК 5: пины 38, 39, 40, 41 (2 актуатора)
- * БЛОК 6: пины 50, 51, 52, 53 (2 актуатора - ФИЗИЧЕСКИ ЗАПАЯН)
- * БЛОК 7: пины 42, 43, 44, 45 (2 актуатора)
- * БЛОК 8: пины 46, 47, 48, 49 (2 актуатора)
- *
- * СВЯЗЬ С ESP32:
- * - Serial1 (TX1=18, RX1=19) → ESP32
- * - Формат команды: JSON строка с \n
- *   {"block":1,"action":"up","duration":12000}
- *   {"block":2,"action":"down","duration":12000}
- *   {"block":0,"action":"stop"}  // 0 = все блоки
+ * PROTOCOL: JSON commands from ESP32
+ * Format: {"block":5,"action":"up","duration":12000}
  */
 
 #include <ArduinoJson.h>
 
 #define MOVE_DURATION 12000  // Время движения по умолчанию (12 секунд)
+#define MAX_ACTIVE_BLOCKS 2  // Максимум 2 блока одновременно
 
 // Таймауты для автоматической остановки
 unsigned long blockTimers[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -48,6 +34,17 @@ Block blocks[8] = {
   {46, 47, 48, 49}   // Блок 8
 };
 
+// Подсчет активных блоков
+int countActiveBlocks() {
+  int count = 0;
+  for (int i = 0; i < 8; i++) {
+    if (blockTimers[i] > 0) {
+      count++;
+    }
+  }
+  return count;
+}
+
 void setup() {
   // Serial для дебага (USB)
   Serial.begin(115200);
@@ -62,6 +59,8 @@ void setup() {
   Serial.println("  Arduino Mega - Pins 22-53");
   Serial.println("  INVERSE LOGIC (LOW=ON, HIGH=OFF)");
   Serial.println("  Serial1 (TX1=18, RX1=19) ↔ ESP32");
+  Serial.println("  JSON PROTOCOL");
+  Serial.println("  MAX 2 BLOCKS ACTIVE");
   Serial.println("========================================\n");
 
   // Настройка всех пинов от 22 до 53
@@ -72,7 +71,7 @@ void setup() {
 
   Serial.println("[INIT] 32 pins (22-53) initialized (all OFF)");
   Serial.println("[INIT] 8 blocks ready");
-  Serial.println("[INIT] Serial1 ready for ESP32 commands");
+  Serial.println("[INIT] Serial1 ready for ESP32 JSON commands");
   Serial.println("\n[READY] Waiting for commands from ESP32...");
   Serial.println("========================================\n");
 
@@ -160,6 +159,24 @@ bool executeBlockCommand(int blockNum, String action, int duration) {
 
   int index = blockNum - 1; // Индекс массива (0-7)
   Block b = blocks[index];
+
+  // Проверка ограничения на количество активных блоков
+  if (action == "up" || action == "down") {
+    int activeCount = countActiveBlocks();
+    bool isThisBlockActive = (blockTimers[index] > 0);
+
+    if (!isThisBlockActive && activeCount >= MAX_ACTIVE_BLOCKS) {
+      Serial.print("[ERROR] Max active blocks limit (");
+      Serial.print(MAX_ACTIVE_BLOCKS);
+      Serial.print("), active: ");
+      Serial.println(activeCount);
+
+      Serial1.print("{\"status\":\"error\",\"message\":\"Max ");
+      Serial1.print(MAX_ACTIVE_BLOCKS);
+      Serial1.println(" blocks limit\"}");
+      return false;
+    }
+  }
 
   // UP - движение вверх
   if (action == "up") {

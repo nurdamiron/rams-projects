@@ -18,13 +18,16 @@ import { GALLERY_CARDS, getProjectsForCard } from "@/lib/data/gallery-config";
 import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/lib/theme-context";
 import { staggerContainer, iconSpin } from "@/lib/animations";
+import { EffectControl } from "@/components/controls/effect-control";
+import { ESP32Client } from "@/lib/esp32-client";
 
 export interface ProjectGalleryProps {
   projects: Project[];
   theme?: "light" | "dark";
-  onProjectSelect?: (project: Project) => void;
+  onProjectSelect?: (projectOrProjects: Project | Project[]) => void;
   onAboutCompany?: () => void;
   connectionStatus?: "online" | "offline" | "warning";
+  esp32Client?: ESP32Client;
 }
 
 export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
@@ -33,6 +36,7 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
   onProjectSelect,
   onAboutCompany,
   connectionStatus = "online",
+  esp32Client,
 }) => {
   const isDark = theme === "dark";
   const { toggleTheme } = useTheme();
@@ -77,6 +81,39 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
 
             {/* Right side buttons - Icons only */}
             <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 z-50">
+              {/* ESP32 Connection Status */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.05 }}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-md shadow-lg",
+                  connectionStatus === "online"
+                    ? "bg-green-600/20 border border-green-500/30"
+                    : "bg-red-600/20 border border-red-500/30"
+                )}
+                title={connectionStatus === "online" ? "ESP32 подключен" : "ESP32 отключен"}
+              >
+                <motion.div
+                  className={cn(
+                    "w-2.5 h-2.5 rounded-full",
+                    connectionStatus === "online" ? "bg-green-500" : "bg-red-500"
+                  )}
+                  animate={
+                    connectionStatus === "online"
+                      ? { scale: [1, 1.2, 1], opacity: [1, 0.8, 1] }
+                      : {}
+                  }
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                <span className={cn(
+                  "text-xs font-medium",
+                  connectionStatus === "online" ? "text-green-300" : "text-red-300"
+                )}>
+                  {connectionStatus === "online" ? "ESP32" : "Offline"}
+                </span>
+              </motion.div>
+
               {/* Language Switcher */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -85,59 +122,6 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
               >
                 <LanguageSwitcher theme={theme} />
               </motion.div>
-
-                {/* About Company Button - Icon */}
-                <motion.button
-                  onClick={onAboutCompany}
-                  className={cn(
-                    "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg",
-                    isDark
-                      ? "bg-primary text-white hover:bg-primary/90"
-                      : "bg-primary-dark text-white hover:bg-primary-dark/90"
-                  )}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ 
-                    opacity: 1, 
-                    scale: 1,
-                    boxShadow: [
-                      "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-                      "0 0 20px rgba(200, 161, 97, 0.4)",
-                      "0 10px 15px -3px rgba(0, 0, 0, 0.1)"
-                    ]
-                  }}
-                  transition={{ 
-                    opacity: { duration: 0.6, delay: 0.15 },
-                    scale: { duration: 0.6, delay: 0.15 },
-                    boxShadow: { duration: 3, repeat: Infinity, ease: "easeInOut" }
-                  }}
-                  whileHover={{ scale: 1.1, boxShadow: "0 0 30px rgba(200, 161, 97, 0.6)" }}
-                  whileTap={{ scale: 0.95 }}
-                    title={t("aboutCompany")}
-                  >
-                    <Icon name="info" size="lg" />
-                  </motion.button>
-
-              {/* Theme Toggle Button */}
-              <motion.button
-                onClick={toggleTheme}
-                className={cn(
-                  "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg",
-                  isDark
-                    ? "bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20"
-                    : "bg-gray-900 border border-gray-800 hover:bg-gray-800"
-                )}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {isDark ? (
-                  <Icon name="light_mode" className="text-white" />
-                ) : (
-                  <Icon name="dark_mode" className="text-white" />
-                )}
-              </motion.button>
             </div>
           </div>
         </motion.header>
@@ -153,6 +137,17 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
             <div className="grid grid-cols-5 grid-rows-3 gap-4 h-full">
               {GALLERY_CARDS.map((card, index) => {
                 const cardProjects = getProjectsForCard(card);
+
+                // Вычисляем номера блоков для проекта
+                let blockNumber = "";
+                if (index === 7) {
+                  blockNumber = "№15"; // 8-й проект (индекс 7) = блок 15
+                } else {
+                  const outerBlock = index * 2 + 1;
+                  const innerBlock = index * 2 + 2;
+                  blockNumber = `№${outerBlock}-${innerBlock}`;
+                }
+
                 return (
                   <ProjectCard
                     key={card.id}
@@ -161,6 +156,7 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                     theme={theme}
                     onClick={onProjectSelect}
                     index={index}
+                    blockNumber={blockNumber}
                   />
                 );
               })}
@@ -168,6 +164,18 @@ export const ProjectGallery: React.FC<ProjectGalleryProps> = ({
           </motion.div>
         </main>
       </div>
+
+      {/* Effect Control - Fixed Bottom Right */}
+      {esp32Client && connectionStatus === "online" && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="fixed bottom-6 right-6 z-50"
+        >
+          <EffectControl esp32Client={esp32Client} className="w-72" />
+        </motion.div>
+      )}
 
       {/* Decorative Elements */}
       <motion.div
