@@ -43,7 +43,7 @@ export default function Home() {
     projects: visibleProjects,  // Передаем список проектов для определения индекса
     enableActuators: true,
     enableLED: true,
-    animationDuration: 6000,  // 6 сек подъем (максимум)
+    animationDuration: 5000,  // 5 сек подъем
     fadeInDuration: 3000,     // 3 сек плавное свечение
   });
 

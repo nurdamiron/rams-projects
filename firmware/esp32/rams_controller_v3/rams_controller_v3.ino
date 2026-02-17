@@ -115,6 +115,15 @@ int activeBlocksCount = 0;
 // LED включается при UP и остается ВКЛ пока не придет STOP или DOWN
 bool ledStates[TOTAL_BLOCKS + 1];  // true = LED ВКЛ, false = LED ВЫКЛ
 
+// Fade состояния для плавного угасания LED при опускании
+struct FadeState {
+  bool isActive;
+  unsigned long startTime;
+  int duration;
+};
+
+FadeState fadeStates[TOTAL_BLOCKS + 1];  // 0 не используется
+
 // Heartbeat
 bool mega1Alive = false;
 bool mega2Alive = false;
@@ -173,6 +182,9 @@ void setup() {
     blockStates[i].startTime = 0;
     blockStates[i].duration = 0;
     ledStates[i] = false;  // LED выключены
+    fadeStates[i].isActive = false;  // Fade выключен
+    fadeStates[i].startTime = 0;
+    fadeStates[i].duration = 0;
   }
 
   // Mega Serial
@@ -272,47 +284,130 @@ void setup() {
     server.send(204);
   });
 
-  // Web Server
+  // Web Server - FULL CONTROL INTERFACE
   server.on("/", HTTP_GET, []() {
-    String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
-    html += "<title>RAMS v3.2</title>";
-    html += "<style>*{margin:0;padding:0;box-sizing:border-box}";
-    html += "body{font-family:Arial;background:#111;color:#fff;padding:20px}";
-    html += "h1{color:#0ff;text-align:center;margin-bottom:20px}";
-    html += ".info{text-align:center;margin-bottom:20px;color:#888}";
-    html += ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:20px}";
-    html += ".block{background:#222;padding:15px;border-radius:8px;border:2px solid #333}";
-    html += ".block.active{border-color:#0f0;background:#1a2a1a}";
-    html += ".block h3{color:#0ff;margin-bottom:10px;font-size:16px}";
-    html += ".btn{padding:8px 16px;margin:4px;border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-size:14px}";
+    String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
+    html += "<title>RAMS v3.2 Control</title>";
+    html += "<style>";
+    html += "*{margin:0;padding:0;box-sizing:border-box}";
+    html += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#0a0a0a;color:#fff;padding:20px;max-width:1400px;margin:0 auto}";
+    html += "h1{color:#0ff;text-align:center;margin-bottom:10px;font-size:28px;text-shadow:0 0 20px #0ff}";
+    html += ".subtitle{text-align:center;color:#888;margin-bottom:30px;font-size:14px}";
+    html += ".section{background:#1a1a1a;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #333}";
+    html += ".section-title{color:#0ff;font-size:18px;margin-bottom:15px;display:flex;align-items:center;gap:10px}";
+    html += ".info{text-align:center;margin-bottom:15px;padding:10px;background:#222;border-radius:8px}";
+    html += ".info span{color:#0f0;font-weight:bold;font-size:20px}";
+
+    // LED Controls
+    html += ".led-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;margin-bottom:20px}";
+    html += ".led-panel{background:#222;padding:15px;border-radius:8px;border:1px solid #333}";
+    html += ".led-panel h4{color:#0ff;margin-bottom:10px;font-size:14px}";
+    html += ".fx-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}";
+    html += ".fx-btn{padding:10px;border:2px solid #444;background:#2a2a2a;color:#aaa;border-radius:6px;cursor:pointer;font-weight:bold;font-size:12px;transition:all 0.2s}";
+    html += ".fx-btn:hover{border-color:#0ff;background:#333}";
+    html += ".fx-btn.active{border-color:#0ff;background:#0a3a3a;color:#0ff;box-shadow:0 0 15px #0ff33}";
+    html += ".slider-container{margin:10px 0}";
+    html += ".slider-label{display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;color:#888}";
+    html += ".slider{width:100%;height:8px;border-radius:4px;background:#333;outline:none;-webkit-appearance:none}";
+    html += ".slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#0ff;cursor:pointer;box-shadow:0 0 10px #0ff}";
+    html += ".slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#0ff;cursor:pointer;border:none;box-shadow:0 0 10px #0ff}";
+    html += ".test-mode{padding:15px;background:linear-gradient(135deg,#1a0a2e,#0a1a2e);border-radius:8px;border:2px solid #0ff;text-align:center}";
+    html += ".test-mode h4{color:#0ff;margin-bottom:10px}";
+    html += ".test-btn{padding:12px 24px;background:#0ff;color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px}";
+    html += ".test-btn:active{transform:scale(0.95)}";
+
+    // Block Grid
+    html += ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}";
+    html += ".block{background:#222;padding:12px;border-radius:8px;border:2px solid #333;transition:all 0.3s}";
+    html += ".block.active{border-color:#0f0;background:#1a2a1a;box-shadow:0 0 20px #0f033}";
+    html += ".block h3{color:#0ff;margin-bottom:8px;font-size:15px;text-align:center}";
+    html += ".btn{padding:8px 12px;margin:3px;border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;width:calc(33.33% - 6px);display:inline-block}";
     html += ".btn:active{transform:scale(0.95)}";
     html += ".up{background:#0f0;color:#000}.down{background:#f60;color:#fff}.stop{background:#f00;color:#fff}";
-    html += ".all-stop{background:#f00;color:#fff;padding:12px 24px;font-size:18px;margin:20px auto;display:block}";
+    html += ".all-stop{background:#f00;color:#fff;padding:15px 30px;font-size:16px;margin:20px auto;display:block;border-radius:8px;border:none;cursor:pointer;font-weight:bold}";
     html += "</style></head><body>";
-    html += "<h1>RAMS v3.2 PRODUCTION</h1>";
-    html += "<div class='info'>Actuators + LED Zones | Active: <span id='active'>0</span>/2</div>";
-    html += "<button class='all-stop' onclick='stopAll()'>STOP ALL</button>";
+
+    html += "<h1>⚡ RAMS v3.2 CONTROL ⚡</h1>";
+    html += "<div class='subtitle'>Full Actuator + LED Control System</div>";
+
+    // LED Effects Section
+    html += "<div class='section'>";
+    html += "<div class='section-title'>💡 LED EFFECTS & CONTROL</div>";
+    html += "<div class='led-controls'>";
+
+    // Effects
+    html += "<div class='led-panel'>";
+    html += "<h4>Effect Select</h4>";
+    html += "<div class='fx-grid'>";
+    html += "<button class='fx-btn active' id='fx0' onclick='setFx(0)'>Static</button>";
+    html += "<button class='fx-btn' id='fx1' onclick='setFx(1)'>Pulse</button>";
+    html += "<button class='fx-btn' id='fx2' onclick='setFx(2)'>Rainbow</button>";
+    html += "<button class='fx-btn' id='fx3' onclick='setFx(3)'>Chase</button>";
+    html += "<button class='fx-btn' id='fx4' onclick='setFx(4)'>Sparkle</button>";
+    html += "<button class='fx-btn' id='fx5' onclick='setFx(5)'>Wave</button>";
+    html += "<button class='fx-btn' id='fx6' onclick='setFx(6)'>Fire</button>";
+    html += "<button class='fx-btn' id='fx7' onclick='setFx(7)'>Meteor</button>";
+    html += "</div></div>";
+
+    // Brightness
+    html += "<div class='led-panel'>";
+    html += "<h4>Brightness</h4>";
+    html += "<div class='slider-container'>";
+    html += "<div class='slider-label'><span>Level</span><span id='briVal'>200</span></div>";
+    html += "<input type='range' min='0' max='255' value='200' class='slider' id='briSlider' oninput='setBri(this.value)'>";
+    html += "</div></div>";
+
+    // Speed
+    html += "<div class='led-panel'>";
+    html += "<h4>Effect Speed</h4>";
+    html += "<div class='slider-container'>";
+    html += "<div class='slider-label'><span>Speed</span><span id='spdVal'>128</span></div>";
+    html += "<input type='range' min='0' max='255' value='128' class='slider' id='spdSlider' oninput='setSpd(this.value)'>";
+    html += "</div></div>";
+
+    // Test Mode
+    html += "<div class='test-mode'>";
+    html += "<h4>🧪 LED TEST MODE</h4>";
+    html += "<button class='test-btn' onclick='ledTest()'>Activate All LEDs</button>";
+    html += "<p style='font-size:11px;color:#888;margin-top:8px'>Test LEDs without moving actuators</p>";
+    html += "</div>";
+
+    html += "</div></div>";
+
+    // Actuator Blocks Section
+    html += "<div class='section'>";
+    html += "<div class='section-title'>🔧 ACTUATOR BLOCKS</div>";
+    html += "<div class='info'>Active Blocks: <span id='active'>0</span>/2</div>";
+    html += "<button class='all-stop' onclick='stopAll()'>🛑 STOP ALL</button>";
     html += "<div class='grid'>";
 
     for (int i = 1; i <= TOTAL_BLOCKS; i++) {
       html += "<div class='block' id='b" + String(i) + "'>";
       html += "<h3>Block " + String(i) + "</h3>";
-      html += "<button class='btn up' onclick='cmd(" + String(i) + ",\"UP\")'>UP</button>";
-      html += "<button class='btn down' onclick='cmd(" + String(i) + ",\"DOWN\")'>DOWN</button>";
-      html += "<button class='btn stop' onclick='cmd(" + String(i) + ",\"STOP\")'>STOP</button>";
+      html += "<button class='btn up' onclick='cmd(" + String(i) + ",\"UP\")'>↑ UP</button>";
+      html += "<button class='btn down' onclick='cmd(" + String(i) + ",\"DOWN\")'>↓ DOWN</button>";
+      html += "<button class='btn stop' onclick='cmd(" + String(i) + ",\"STOP\")'>⏹ STOP</button>";
       html += "</div>";
     }
 
-    html += "</div><script>";
+    html += "</div></div>";
+
+    // JavaScript
+    html += "<script>";
+    html += "let currentFx=0;";
     html += "function cmd(b,a){fetch('/api/block?num='+b+'&action='+a+'&duration=10000',{method:'POST'}).then(()=>updateStatus())}";
     html += "function stopAll(){fetch('/api/stop',{method:'POST'}).then(()=>updateStatus())}";
+    html += "function setFx(id){document.querySelectorAll('.fx-btn').forEach(b=>b.classList.remove('active'));document.getElementById('fx'+id).classList.add('active');currentFx=id;fetch('/api/effect?id='+id,{method:'POST'})}";
+    html += "function setBri(v){document.getElementById('briVal').textContent=v;fetch('/api/bri?v='+v,{method:'POST'})}";
+    html += "function setSpd(v){document.getElementById('spdVal').textContent=v;fetch('/api/spd?v='+v,{method:'POST'})}";
+    html += "function ledTest(){for(let i=1;i<=15;i++){fetch('/api/led-test?block='+i,{method:'POST'})}}";
     html += "function updateStatus(){fetch('/api/status').then(r=>r.json()).then(d=>{";
     html += "document.getElementById('active').textContent=d.active;";
     html += "for(let i=1;i<=15;i++){";
     html += "const b=document.getElementById('b'+i);";
     html += "if(b)b.classList.toggle('active',d.blocks.includes(i))";
     html += "}});}";
-    html += "setInterval(updateStatus,1000);updateStatus();";
+    html += "setInterval(updateStatus,2000);updateStatus();";
     html += "</script></body></html>";
 
     server.send(200, "text/html", html);
@@ -417,6 +512,7 @@ void setup() {
     for (int i = 1; i <= TOTAL_BLOCKS; i++) {
       blockStates[i].isActive = false;
       ledStates[i] = false;  // ❌ Выключить все LED
+      fadeStates[i].isActive = false;  // ❌ Отменить fade анимации
     }
     activeBlocksCount = 0;
 
@@ -556,6 +652,36 @@ void setup() {
     server.send(200, "text/plain", "OK");
   });
 
+  // OPTIONS для /api/led-test
+  server.on("/api/led-test", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    server.send(204);
+  });
+
+  // LED TEST MODE - включить LED БЕЗ движения актуаторов
+  server.on("/api/led-test", HTTP_POST, []() {
+    // CORS заголовки
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    int blockNum = server.arg("block").toInt();
+
+    if (blockNum < 1 || blockNum > TOTAL_BLOCKS) {
+      server.send(400, "text/plain", "ERROR:Invalid block");
+      return;
+    }
+
+    // Включить LED состояние БЕЗ движения актуатора
+    ledStates[blockNum] = true;
+    lightUpBlock(blockNum);
+
+    Serial.printf("[LED TEST] Block %d LED turned ON (actuator NOT moved)\n", blockNum);
+    server.send(200, "text/plain", "OK");
+  });
+
   // ===== POWER CONTROL API (ВРЕМЕННО ОТКЛЮЧЕНО) =====
   /*
   server.on("/api/power/on", HTTP_POST, []() {
@@ -666,11 +792,19 @@ void lightUpBlock(int blockNum) {
 }
 
 /**
- * Fade LED зоны для блока
+ * Fade LED зоны для блока (плавное угасание синхронно с опусканием актуатора)
  */
 void fadeBlock(int blockNum) {
-  // TODO: реализовать fade эффект
-  Serial.printf("[LED] Block %d FADE (not implemented yet)\n", blockNum);
+  if (blockNum < 1 || blockNum > TOTAL_BLOCKS) {
+    return;
+  }
+
+  // Запустить fade анимацию с тем же duration что у актуатора
+  fadeStates[blockNum].isActive = true;
+  fadeStates[blockNum].startTime = millis();
+  fadeStates[blockNum].duration = blockStates[blockNum].duration;
+
+  Serial.printf("[LED] Block %d FADE started (%dms)\n", blockNum, fadeStates[blockNum].duration);
 }
 
 /**
@@ -741,6 +875,7 @@ void fxPulse() {
   // Применить к активным блокам (проверяем LED состояние, не актуатор!)
   for (int i = 1; i <= TOTAL_BLOCKS; i++) {
     if (!ledStates[i]) continue;  // ✅ Проверяем LED состояние
+    if (fadeStates[i].isActive) continue;  // ✅ Пропускаем блоки в fade!
 
     int sector = (i - 1) / 2;
     bool isOuter = (i % 2 == 1);
@@ -799,6 +934,8 @@ void fxRainbow() {
       bool inActiveBlock = false;
       for (int i = 1; i <= TOTAL_BLOCKS; i++) {
         if (!ledStates[i]) continue;  // ✅ Проверяем LED состояние
+        if (fadeStates[i].isActive) continue;  // ✅ Пропускаем блоки в fade!
+
         int sector = (i - 1) / 2;
         bool isOuter = (i % 2 == 1);
         uint8_t L = RAY[sector];
@@ -1032,6 +1169,72 @@ void loop() {
     Mega1Serial.println(CMD_PING);
     Mega2Serial.println(CMD_PING);
     lastHeartbeat = now;
+  }
+
+  // ===== ПЛАВНОЕ УГАСАНИЕ LED ПРИ ОПУСКАНИИ =====
+  // Обрабатываем fade для каждого блока
+  for (int i = 1; i <= TOTAL_BLOCKS; i++) {
+    if (fadeStates[i].isActive) {
+      unsigned long elapsed = now - fadeStates[i].startTime;
+
+      if (elapsed >= fadeStates[i].duration) {
+        // Fade завершен - выключаем LED полностью
+        fadeStates[i].isActive = false;
+        turnOffBlock(i);
+        Serial.printf("[LED] Block %d FADE completed\n", i);
+      } else {
+        // Продолжаем fade - плавно уменьшаем яркость
+        float progress = (float)elapsed / (float)fadeStates[i].duration;  // 0.0 - 1.0
+        uint8_t fadeBrightness = (uint8_t)(255 * (1.0 - progress));       // 255 → 0
+
+        // Создаем цвет с учетом fade
+        CRGB fadeColor = CRGB(gR, gG, gB);
+        fadeColor.nscale8(fadeBrightness);
+
+        // Получаем координаты блока
+        int sector = (i - 1) / 2;
+        bool isOuter = (i % 2 == 1);
+        uint8_t L = RAY[sector];
+        uint8_t R = RAY[(sector + 1) % 8];
+
+        // Применяем fade цвет к LED этого блока
+        if (i == 15) {
+          // Блок 15: полные лучи + внутренний круг
+          for (int j = 0; j < 33; j++) {
+            leds[L][j] = fadeColor;
+            leds[R][j] = fadeColor;
+          }
+          for (int j = 0; j < INNER_COUNT[sector]; j++) {
+            leds[S_INNER][INNER_START[sector] + j] = fadeColor;
+          }
+        }
+        else if (isOuter) {
+          // ВНЕШНИЕ блоки: внешняя часть лучей + внешний круг
+          for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
+            leds[L][j] = fadeColor;
+            leds[R][j] = fadeColor;
+          }
+          for (int j = 0; j < OUTER_COUNT[sector]; j++) {
+            leds[S_OUTER][OUTER_START[sector] + j] = fadeColor;
+          }
+        }
+        else {
+          // ВНУТРЕННИЕ блоки: внутренняя часть лучей + оба круга
+          for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
+            leds[L][j] = fadeColor;
+            leds[R][j] = fadeColor;
+          }
+          for (int j = 0; j < INNER_COUNT[sector]; j++) {
+            leds[S_INNER][INNER_START[sector] + j] = fadeColor;
+          }
+          for (int j = 0; j < OUTER_COUNT[sector]; j++) {
+            leds[S_OUTER][OUTER_START[sector] + j] = fadeColor;
+          }
+        }
+
+        FastLED.show();
+      }
+    }
   }
 
   // ===== LED ЭФФЕКТЫ =====

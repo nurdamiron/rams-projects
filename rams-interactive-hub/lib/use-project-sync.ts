@@ -233,28 +233,14 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
     const blocks = projectIndex !== -1 ? getBlocksForProject(projectIndex) : [];
 
     try {
-      // 1. ОЧЕНЬ плавно погасить LED (5 секунд, 100 шагов)
-      if (opts.enableLED) {
-        console.log("[ProjectSync] 💡 Fading out LED (5 seconds)...");
-        const fadeOutSteps = 100;
-        const fadeOutDuration = 5000; // 5 секунд
-        const stepDelay = fadeOutDuration / fadeOutSteps;
-
-        for (let i = fadeOutSteps; i >= 0; i--) {
-          const brightness = Math.floor((i / fadeOutSteps) * 200); // 200 -> 0
-          await client.setLEDBrightness(brightness);
-          await new Promise(resolve => setTimeout(resolve, stepDelay));
-        }
-        console.log("[ProjectSync] ✅ LED faded out completely");
-      }
-
-      // 2. Опустить актуаторы И выключить LED зоны
+      // Опустить актуаторы с плавным fade LED (6 секунд)
       if (opts.enableActuators && blocks.length > 0) {
-        console.log(`[ProjectSync] 📉 Lowering blocks and turning off LED zones...`);
+        console.log(`[ProjectSync] 📉 Lowering blocks with smooth LED fade (6s)...`);
         for (const blockNum of blocks) {
-          await client.blockDown(blockNum, 8000); // 8 секунд вниз + выключает ledStates[blockNum]
+          await client.blockDown(blockNum, 6000); // 6 секунд DOWN + плавный fade в прошивке
           await new Promise(resolve => setTimeout(resolve, 200));
         }
+        console.log(`[ProjectSync] ✅ Blocks lowered, LED faded out`);
       } else if (blocks.length > 0) {
         // Если актуаторы отключены, но нужно выключить LED
         console.log(`[ProjectSync] 💡 Turning off LED zones (actuators disabled)...`);
@@ -305,30 +291,15 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
     console.log("[ProjectSync] ============ LOWER ALL START ============");
 
     try {
-      // ОЧЕНЬ плавно погасить LED (5 секунд, 100 шагов)
-      if (opts.enableLED) {
-        console.log("[ProjectSync] 💡 Fading out LED (5 seconds)...");
-        const fadeOutSteps = 100;
-        const fadeOutDuration = 5000; // 5 секунд
-        const stepDelay = fadeOutDuration / fadeOutSteps;
-
-        for (let i = fadeOutSteps; i >= 0; i--) {
-          const brightness = Math.floor((i / fadeOutSteps) * 200); // 200 -> 0
-          await client.setLEDBrightness(brightness);
-          await new Promise(resolve => setTimeout(resolve, stepDelay));
-        }
-        console.log("[ProjectSync] ✅ LED faded out completely");
-      }
-
-      // Опустить все блоки последовательно
+      // Опустить все блоки последовательно с плавным fade (6 секунд)
       if (opts.enableActuators) {
-        console.log("[ProjectSync] 📉 Lowering all blocks sequentially...");
+        console.log("[ProjectSync] 📉 Lowering all blocks sequentially with smooth LED fade (6s)...");
         for (let blockNum = 1; blockNum <= 15; blockNum++) {
           console.log(`[ProjectSync] 📉 Lowering block ${blockNum}/15...`);
-          await client.blockDown(blockNum, 8000); // 8 секунд вниз
+          await client.blockDown(blockNum, 6000); // 6 секунд DOWN + плавный fade в прошивке
           await new Promise(resolve => setTimeout(resolve, 300)); // 300ms между блоками
         }
-        console.log("[ProjectSync] ✅ All blocks lowered");
+        console.log("[ProjectSync] ✅ All blocks lowered, LED faded out");
       }
 
       setActiveProject(null);
