@@ -29,10 +29,32 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Debug - List dist folder contents
+        run: |
+          Write-Host "=== Contents of dist/ folder ==="
+          if (Test-Path "dist") {
+            Get-ChildItem -Path "dist" -Recurse | Select-Object FullName
+          } else {
+            Write-Host "dist/ folder does not exist!"
+          }
+        shell: pwsh
+        continue-on-error: true
+
+      - name: Upload all exe files
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAMS-Windows-Installers
+          path: |
+            rams-interactive-hub/dist/*.exe
+            rams-interactive-hub/dist/**/*.exe
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Create media folder placeholder
         run: |
-          New-Item -ItemType Directory -Force -Path "dist/win-unpacked/resources/media/projects"
-          Set-Content -Path "dist/win-unpacked/resources/media/README.txt" -Value @"
+          if (Test-Path "dist/win-unpacked") {
+            New-Item -ItemType Directory -Force -Path "dist/win-unpacked/resources/media/projects"
+            Set-Content -Path "dist/win-unpacked/resources/media/README.txt" -Value @"
           RAMS Interactive Hub - Media Files
           ====================================
           Place your project media files here:
@@ -49,15 +71,26 @@ jobs:
 
           Each project folder should match the project ID.
           "@
+          } else {
+            Write-Host "win-unpacked folder not found, skipping media placeholder"
+          }
         shell: pwsh
+        continue-on-error: true
 
       - name: Zip win-unpacked
-        run: Compress-Archive -Path "dist/win-unpacked/*" -DestinationPath "dist/RAMS-Interactive-Hub-win-x64.zip"
+        run: |
+          if (Test-Path "dist/win-unpacked") {
+            Compress-Archive -Path "dist/win-unpacked/*" -DestinationPath "dist/RAMS-Interactive-Hub-win-x64-Portable.zip"
+          } else {
+            Write-Host "win-unpacked folder not found, skipping zip"
+          }
         shell: pwsh
+        continue-on-error: true
 
-      - name: Upload Windows artifact
+      - name: Upload Portable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: RAMS-Interactive-Hub-Windows
-          path: rams-interactive-hub/dist/RAMS-Interactive-Hub-win-x64.zip
+          name: RAMS-Windows-Portable
+          path: rams-interactive-hub/dist/RAMS-Interactive-Hub-win-x64-Portable.zip
           retention-days: 30
+          if-no-files-found: warn
