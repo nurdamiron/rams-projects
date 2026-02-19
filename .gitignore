@@ -58,3 +58,8 @@ npm-debug.log*
 # Extracted info
 project-info-extracted/
 Информация по проектам/
+
+# PlatformIO build artifacts
+**/.pio/
+**/led_strip_test/
+**/svetdiod-project/

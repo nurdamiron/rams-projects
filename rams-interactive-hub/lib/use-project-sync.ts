@@ -6,6 +6,7 @@
 import * as React from "react";
 import { Project } from "@/lib/types";
 import { ESP32Client, createLocalESP32Client } from "@/lib/esp32-client";
+import { getBlockNumberForProject } from "@/lib/data/gallery-config";
 
 // Генерация цветов для проектов (градиент по кругу)
 const generateProjectColor = (index: number, total: number): { r: number; g: number; b: number } => {
@@ -29,24 +30,21 @@ const generateProjectColor = (index: number, total: number): { r: number; g: num
 };
 
 /**
- * Получить блоки для проекта по его индексу
- * @param projectIndex Индекс проекта в списке (0-based)
+ * Получить блоки для проекта по его ID
+ * @param projectId ID проекта (например, "09-rams-garden-almaty")
  * @returns Массив номеров блоков
  */
-const getBlocksForProject = (projectIndex: number): number[] => {
-  // Первые 15 проектов управляют блоками 1-15 (по одному блоку)
-  // Проекты 16+ не управляют актуаторами
+const getBlocksForProject = (projectId: string): number[] => {
+  // Используем маппинг из gallery-config.ts
+  // Несколько проектов могут управлять одним и тем же блоком
+  // Например: HAVAL, HYUNDAI, LUKOIL все управляют блоком 2
 
-  if (projectIndex < 0 || projectIndex >= 15) {
-    return []; // Проекты вне диапазона 0-14 не управляют актуаторами
+  const blockNum = getBlockNumberForProject(projectId);
+
+  if (blockNum === undefined) {
+    console.warn(`[getBlocksForProject] Project ${projectId} not found in gallery config`);
+    return []; // Проект не найден в gallery-config
   }
-
-  // Прямое соответствие: проект N → блок N+1
-  // Проект 0 → блок 1
-  // Проект 1 → блок 2
-  // ...
-  // Проект 14 → блок 15
-  const blockNum = projectIndex + 1;
 
   return [blockNum];
 };
@@ -63,8 +61,8 @@ export interface ProjectSyncOptions {
 const DEFAULT_OPTIONS: ProjectSyncOptions = {
   enableActuators: true,
   enableLED: true,
-  animationDuration: 6000,  // 6 секунд подъем
-  fadeInDuration: 3000,     // 3 секунды плавное свечение
+  animationDuration: 2000,  // 2 секунды подъем
+  fadeInDuration: 2000,     // 2 секунды плавное свечение
   autoConnect: true,
 };
 
@@ -159,19 +157,20 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
     setIsAnimating(true);
     setActiveProject(project);
 
-    // Найти индекс проекта в списке
+    // Найти индекс проекта в списке (для генерации цвета)
     const projectIndex = opts.projects?.findIndex(p => p.id === project.id) ?? -1;
     console.log(`[ProjectSync] Project Index: ${projectIndex} (out of ${opts.projects?.length || 0} projects)`);
 
-    if (projectIndex === -1) {
-      console.error(`[ProjectSync] ❌ Project ${project.id} not found in projects list`);
+    // Получить блок для проекта по ID (из gallery-config.ts)
+    const blocks = getBlocksForProject(project.id);
+    const color = generateProjectColor(projectIndex >= 0 ? projectIndex : 0, opts.projects?.length || 28);
+
+    if (blocks.length === 0) {
+      console.warn(`[ProjectSync] ⚠️ Project ${project.id} has no associated blocks. Skipping actuator activation.`);
       setIsAnimating(false);
       return;
     }
 
-    // Получить блоки и цвет для проекта по индексу
-    const blocks = getBlocksForProject(projectIndex);
-    const color = generateProjectColor(projectIndex, opts.projects?.length || 8);
     console.log(`[ProjectSync] Blocks to activate: [${blocks.join(', ')}]`);
     console.log(`[ProjectSync] LED Color: RGB(${color.r}, ${color.g}, ${color.b})`);
 
@@ -228,16 +227,15 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
   const deactivateProject = React.useCallback(async () => {
     if (!isConnected || !activeProject) return;
 
-    // Найти индекс активного проекта
-    const projectIndex = opts.projects?.findIndex(p => p.id === activeProject.id) ?? -1;
-    const blocks = projectIndex !== -1 ? getBlocksForProject(projectIndex) : [];
+    // Получить блоки для активного проекта по ID
+    const blocks = getBlocksForProject(activeProject.id);
 
     try {
-      // Опустить актуаторы с плавным fade LED (6 секунд)
+      // Опустить актуаторы с плавным fade LED (3 секунды)
       if (opts.enableActuators && blocks.length > 0) {
-        console.log(`[ProjectSync] 📉 Lowering blocks with smooth LED fade (6s)...`);
+        console.log(`[ProjectSync] 📉 Lowering blocks with smooth LED fade (3s)...`);
         for (const blockNum of blocks) {
-          await client.blockDown(blockNum, 6000); // 6 секунд DOWN + плавный fade в прошивке
+          await client.blockDown(blockNum, 3000); // 3 секунды DOWN + плавный fade в прошивке
           await new Promise(resolve => setTimeout(resolve, 200));
         }
         console.log(`[ProjectSync] ✅ Blocks lowered, LED faded out`);
@@ -291,12 +289,12 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
     console.log("[ProjectSync] ============ LOWER ALL START ============");
 
     try {
-      // Опустить все блоки последовательно с плавным fade (6 секунд)
+      // Опустить все блоки последовательно с плавным fade (3 секунды)
       if (opts.enableActuators) {
-        console.log("[ProjectSync] 📉 Lowering all blocks sequentially with smooth LED fade (6s)...");
+        console.log("[ProjectSync] 📉 Lowering all blocks sequentially with smooth LED fade (3s)...");
         for (let blockNum = 1; blockNum <= 15; blockNum++) {
           console.log(`[ProjectSync] 📉 Lowering block ${blockNum}/15...`);
-          await client.blockDown(blockNum, 6000); // 6 секунд DOWN + плавный fade в прошивке
+          await client.blockDown(blockNum, 3000); // 3 секунды DOWN + плавный fade в прошивке
           await new Promise(resolve => setTimeout(resolve, 300)); // 300ms между блоками
         }
         console.log("[ProjectSync] ✅ All blocks lowered, LED faded out");

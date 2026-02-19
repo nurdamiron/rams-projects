@@ -37,8 +37,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Вид на Кок-Тобе"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/09-rams-garden-almaty/images/main.jpg", video: "/projects/09-rams-garden-almaty/videos/main.mp4", isActive: true },
-      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/09-rams-garden-almaty/images/main.jpg", isActive: false },
+      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/09-rams-garden-almaty/images/main.jpg", isActive: true },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/09-rams-garden-almaty/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/09-rams-garden-almaty/images/scenes/02.jpg", isActive: false },
       { id: "4", type: "Фото", title: "Вид 4", image: "/projects/09-rams-garden-almaty/images/scenes/03.jpg", isActive: false },
@@ -161,7 +160,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Рядом ТРЦ Forum"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/11-rams-signature/images/main.jpg", video: "/projects/11-rams-signature/videos/main.mp4", isActive: true },
+      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/11-rams-signature/images/main.jpg", video: "/projects/11-rams-signature/videos/facade-1.mp4", isActive: true },
       { id: "1", type: "Фото", title: "Главный вид", image: "/projects/11-rams-signature/images/main.jpg", isActive: false },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/11-rams-signature/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/11-rams-signature/images/scenes/02.jpg", isActive: false },
@@ -231,7 +230,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Станция метро Райымбек Батыра"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/12-rams-saiahat/images/main.jpg", video: "/projects/12-rams-saiahat/videos/main.mp4", isActive: true },
+      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/12-rams-saiahat/images/main.jpg", video: "/projects/12-rams-saiahat/videos/saiahat.mp4", isActive: true },
       { id: "1", type: "Фото", title: "Главный вид", image: "/projects/12-rams-saiahat/images/main.jpg", isActive: false },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/12-rams-saiahat/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/12-rams-saiahat/images/scenes/02.jpg", isActive: false },
@@ -266,8 +265,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Река Жайык в шаговой доступности"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/13-rams-garden-atyrau/images/main.jpg", video: "/projects/13-rams-garden-atyrau/videos/main.mp4", isActive: true },
-      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/13-rams-garden-atyrau/images/main.jpg", isActive: false },
+      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/13-rams-garden-atyrau/images/main.jpg", isActive: true },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/13-rams-garden-atyrau/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/13-rams-garden-atyrau/images/scenes/02.jpg", isActive: false },
       { id: "4", type: "Фото", title: "Вид 4", image: "/projects/13-rams-garden-atyrau/images/scenes/03.jpg", isActive: false },
@@ -301,7 +299,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Безопасный двор без машин"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/15-rams-evo/images/main.jpg", video: "/projects/15-rams-evo/videos/main.mp4", isActive: true },
+      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/15-rams-evo/images/main.jpg", video: "/projects/15-rams-evo/videos/evo.mp4", isActive: true },
       { id: "1", type: "Фото", title: "Главный вид", image: "/projects/15-rams-evo/images/main.jpg", isActive: false },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/15-rams-evo/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/15-rams-evo/images/scenes/02.jpg", isActive: false },
@@ -500,8 +498,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Консьерж-услуги"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/26-marriott-issykkul/images/main.jpg", video: "/projects/26-marriott-issykkul/videos/main.mp4", isActive: true },
-      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/26-marriott-issykkul/images/main.jpg", isActive: false },
+      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/26-marriott-issykkul/images/main.jpg", isActive: true },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/26-marriott-issykkul/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/26-marriott-issykkul/images/scenes/02.jpg", isActive: false },
       { id: "4", type: "Фото", title: "Вид 4", image: "/projects/26-marriott-issykkul/images/scenes/03.jpg", isActive: false },
@@ -539,7 +536,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Арт-центр для детей с мастерскими"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: PLACEHOLDER_IMAGE, video: "/projects/01-rams-beyond-st-regis/videos/main.mp4", isActive: true },
+      { id: "1", type: "Фото", title: "Главный вид", image: PLACEHOLDER_IMAGE, isActive: true },
     ],
   },
   // 17. RAMS CITY KAZAKHSTAN
@@ -741,8 +738,7 @@ export const RAMS_PROJECTS: Project[] = [
       "Конференц-залы для международных событий"
     ],
     scenes: [
-      { id: "v1", type: "Видео", title: "Презентация", image: "/projects/14-ortau-marriott-bc/images/main.jpg", video: "/projects/14-ortau-marriott-bc/videos/main.mp4", isActive: true },
-      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/14-ortau-marriott-bc/images/main.jpg", isActive: false },
+      { id: "1", type: "Фото", title: "Главный вид", image: "/projects/14-ortau-marriott-bc/images/main.jpg", isActive: true },
       { id: "2", type: "Фото", title: "Вид 2", image: "/projects/14-ortau-marriott-bc/images/scenes/01.jpg", isActive: false },
       { id: "3", type: "Фото", title: "Вид 3", image: "/projects/14-ortau-marriott-bc/images/scenes/02.jpg", isActive: false },
     ],
