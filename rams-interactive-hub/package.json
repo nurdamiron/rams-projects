@@ -55,12 +55,6 @@
     },
     "npmRebuild": false,
     "publish": null,
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "public/icon.ico",
-      "uninstallerIcon": "public/icon.ico"
-    },
     "win": {
       "target": [
         {
@@ -76,8 +70,17 @@
           ]
         }
       ],
-      "icon": "public/icon.ico",
-      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable.${ext}"
     },
     "mac": {
       "category": "public.app-category.business",
