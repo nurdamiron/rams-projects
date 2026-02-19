@@ -54,7 +54,7 @@ let blockMapping = {}; // { galleryCardId: physicalBlockNumber } — custom over
 
 // ===================== LG TV SSAP CLIENT =====================
 const MEDIA_SERVER_PORT = 8888;
-const SSAP_PORT = 3000;
+const SSAP_PORT = 3001;        // webOS 6+ uses wss:// on port 3001 (not ws:// on 3000)
 
 let tvIP = '';
 let tvClientKey = '';
@@ -63,6 +63,7 @@ let tvConnected = false;
 let mediaServer = null;
 let ssapRequestId = 1;
 let currentBlock = null;
+let activeBlocks = new Set(); // Track active blocks (max 2)
 let lastCommandTime = 0;
 let debounceTimer = null;
 let healthCheckTimer = null;
@@ -260,7 +261,54 @@ function startMediaServer() {
 
   mediaServer = http.createServer((req, res) => {
     const mediaRoot = getMediaRoot();
-    const urlPath = decodeURIComponent(req.url.split('?')[0]);
+    const rawUrl = req.url || '/';
+
+    // Special route: /player?video=... — HTML5 video player page for LG TV browser
+    if (rawUrl.startsWith('/player')) {
+      const queryIndex = rawUrl.indexOf('?');
+      const query = queryIndex !== -1 ? rawUrl.slice(queryIndex + 1) : '';
+      const params = new URLSearchParams(query);
+      const videoRelPath = params.get('video') || '';
+      const localIP = getLocalIP();
+      const videoSrc = videoRelPath
+        ? `http://${localIP}:${MEDIA_SERVER_PORT}/${videoRelPath.replace(/^\/+/, '')}`
+        : '';
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAMS Video</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  video { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+</style>
+</head>
+<body>
+  <video id="v" autoplay playsinline>
+    <source src="${videoSrc}" type="video/mp4">
+  </video>
+  <script>
+    var v = document.getElementById('v');
+    v.play().catch(function() {
+      document.body.addEventListener('click', function() { v.play(); }, { once: true });
+    });
+  </script>
+</body>
+</html>`;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(html);
+      log(`[MediaServer] Served player page for: ${videoRelPath}`);
+      return;
+    }
+
+    const urlPath = decodeURIComponent(rawUrl.split('?')[0]);
     const filePath = path.join(mediaRoot, urlPath);
 
     // Security: prevent directory traversal
@@ -334,8 +382,11 @@ function connectToTV() {
   }
 
   try {
-    log(`[TV] Connecting to ws://${tvIP}:${SSAP_PORT}...`);
-    tvWs = new WebSocket(`ws://${tvIP}:${SSAP_PORT}`);
+    log(`[TV] Connecting to wss://${tvIP}:${SSAP_PORT}...`);
+    // LG webOS 6+ uses wss:// with self-signed cert — must disable cert check
+    tvWs = new WebSocket(`wss://${tvIP}:${SSAP_PORT}`, {
+      rejectUnauthorized: false,
+    });
 
     tvWs.on('open', () => {
       log(`[TV] WebSocket connected to ${tvIP}:${SSAP_PORT}`);
@@ -435,26 +486,62 @@ function sendSSAP(uri, payload = {}) {
 }
 
 // Play video on LG TV
+// Strategy:
+//   1. Try ssap://media.viewer/open (works on webOS 4-5)
+//   2. Fallback: open LG TV browser with our HTML5 player page (works on all webOS versions)
 async function playVideoOnTV(videoRelPath) {
   // Ensure media server is running
   startMediaServer();
 
   const localIP = getLocalIP();
-  const videoUrl = `http://${localIP}:${MEDIA_SERVER_PORT}/${videoRelPath}`;
-  log(`[TV] Playing on TV: ${videoUrl}`);
 
-  return sendSSAP('ssap://media.viewer/open', {
+  // Strip leading slashes to avoid double-slash in URL
+  const cleanPath = videoRelPath.replace(/^\/+/, '');
+  const videoUrl = `http://${localIP}:${MEDIA_SERVER_PORT}/${cleanPath}`;
+  // HTML5 player page URL (served by our media server at /player?video=...)
+  const playerUrl = `http://${localIP}:${MEDIA_SERVER_PORT}/player?video=${encodeURIComponent(cleanPath)}`;
+
+  log(`[TV] Playing on TV:`);
+  log(`[TV]   videoUrl   = ${videoUrl}`);
+  log(`[TV]   playerUrl  = ${playerUrl}`);
+
+  if (!tvWs || tvWs.readyState !== WebSocket.OPEN) {
+    log('[TV] Not connected — cannot play video');
+    return false;
+  }
+
+  // Method 1: ssap://media.viewer/open (webOS 4-5)
+  // Try it first, then also open browser as fallback (webOS 6+)
+  const mediaViewerSent = await sendSSAP('ssap://media.viewer/open', {
     url: videoUrl,
-    title: 'RAMS',
+    title: 'RAMS Global',
     description: '',
     mimeType: 'video/mp4',
     loop: false,
   });
+
+  log(`[TV] media.viewer/open sent: ${mediaViewerSent}`);
+
+  // Method 2 (always): Open browser with our HTML5 player page
+  // This works on ALL webOS versions regardless of media.viewer support
+  const browserSent = await sendSSAP('ssap://system.launcher/open', {
+    id: 'com.webos.app.browser',
+    params: { target: playerUrl },
+  });
+
+  log(`[TV] browser launcher sent: ${browserSent}`);
+
+  return mediaViewerSent || browserSent;
 }
 
 // Stop video on TV
-function stopVideoOnTV() {
-  return sendSSAP('ssap://media.viewer/close');
+async function stopVideoOnTV() {
+  // Close media viewer (webOS 4-5)
+  await sendSSAP('ssap://media.viewer/close');
+  // Close browser app (webOS 6+)
+  await sendSSAP('ssap://system.launcher/close', { id: 'com.webos.app.browser' });
+  log('[TV] Stop video sent');
+  return true;
 }
 
 // Cleanup TV resources
@@ -811,24 +898,26 @@ app.whenReady().then(() => {
 
   ipcMain.handle('hardware-all-stop', async () => {
     currentBlock = null;
-    return sendUdpCommand('ALL:STOP');
+    activeBlocks.clear();
+    return sendHttpRequest('/api/stop');
   });
 
   ipcMain.handle('hardware-all-down', async () => {
     currentBlock = null;
-    return sendUdpCommand('ALL:DOWN');
+    activeBlocks.clear();
+    return sendHttpRequest('/api/all', { action: 'down' });
   });
 
   ipcMain.handle('hardware-led-mode', async (_event, mode) => {
-    return sendUdpCommand(`LED:MODE:${mode}`);
+    return sendHttpRequest('/api/led', { mode });
   });
 
   ipcMain.handle('hardware-led-color', async (_event, hexColor) => {
-    return sendUdpCommand(`LED:COLOR:${hexColor}`);
+    return sendHttpRequest('/api/led', { color: hexColor });
   });
 
   ipcMain.handle('hardware-led-brightness', async (_event, brightness) => {
-    return sendUdpCommand(`LED:BRIGHTNESS:${brightness}`);
+    return sendHttpRequest('/api/led', { brightness });
   });
 
   ipcMain.handle('hardware-get-status', () => {
@@ -843,20 +932,32 @@ app.whenReady().then(() => {
   ipcMain.handle('hardware-set-ip', (_event, newIP) => {
     espIP = newIP;
     saveHardwareConfig();
-    // Reset connection state and ping immediately
+    // Reset connection state and check immediately
     espConnected = false;
     lastPong = 0;
-    sendUdpCommand('PING');
+    sendHttpRequest('/api/status').catch(() => {});
     return { success: true, ip: espIP };
   });
 
   ipcMain.handle('hardware-ping', async () => {
-    const sent = await sendUdpCommand('PING');
+    const sent = await sendHttpRequest('/api/status');
     return { sent, connected: espConnected, lastPong };
   });
 
   ipcMain.handle('hardware-send-command', async (_event, cmd) => {
-    return sendUdpCommand(cmd);
+    // Translate legacy UDP command strings to HTTP for backward compat
+    if (cmd === 'PING') return sendHttpRequest('/api/status');
+    if (cmd === 'ALL:STOP') return sendHttpRequest('/api/stop');
+    if (cmd === 'ALL:DOWN') return sendHttpRequest('/api/all', { action: 'down' });
+    if (cmd.startsWith('LED:MODE:')) return sendHttpRequest('/api/led', { mode: cmd.split(':')[2] });
+    if (cmd.startsWith('LED:COLOR:')) return sendHttpRequest('/api/led', { color: cmd.split(':')[2] });
+    if (cmd.startsWith('LED:BRIGHTNESS:')) return sendHttpRequest('/api/led', { brightness: cmd.split(':')[2] });
+    if (cmd.startsWith('BLOCK:')) {
+      const parts = cmd.split(':');
+      return sendHttpRequest('/api/block', { num: parts[1], action: parts[2].toLowerCase(), duration: BLOCK_DURATION_MS });
+    }
+    log(`[HTTP] Unknown command: ${cmd}`);
+    return false;
   });
 
   ipcMain.handle('hardware-get-block-mapping', () => {

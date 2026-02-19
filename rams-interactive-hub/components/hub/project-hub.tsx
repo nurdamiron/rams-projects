@@ -143,11 +143,18 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   const videoScene = allProjects.find(p => p.scenes.find(s => s.video))?.scenes.find(s => s.video);
   const hasVideo = !!videoScene;
 
-  // Check TV status on mount
+  // Check TV status on mount + listen for real-time changes from Electron IPC
   React.useEffect(() => {
     hardwareService.tvGetStatus().then((status) => {
       setTvConnected(status.connected);
     });
+
+    // Listen for TV connection status changes from Electron main process
+    if (typeof window !== 'undefined' && (window as any).electron?.onTvStatusChanged) {
+      (window as any).electron.onTvStatusChanged((data: { connected: boolean }) => {
+        setTvConnected(data.connected);
+      });
+    }
   }, []);
 
   // Auto slideshow (5 seconds interval)
@@ -247,33 +254,53 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
 
             {/* Video Button */}
             {hasVideo && (
-              <button
-                onClick={async () => {
-                  if (isVideoPlaying) {
-                    await hardwareService.tvStopVideo();
-                    setIsVideoPlaying(false);
-                  } else {
-                    const videoPath = videoScene!.video!;
-                    const sent = await hardwareService.tvPlayVideo(videoPath);
-                    if (sent) {
-                      setIsVideoPlaying(true);
+              <div className="absolute bottom-10 left-10 flex flex-col items-start gap-2">
+                {/* TV Connection Status Badge */}
+                <div className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm border",
+                  tvConnected
+                    ? "bg-green-500/20 border-green-500/40 text-green-300"
+                    : "bg-gray-800/60 border-gray-600/40 text-gray-400"
+                )}>
+                  <span className={cn(
+                    "w-2 h-2 rounded-full",
+                    tvConnected ? "bg-green-400 animate-pulse" : "bg-gray-500"
+                  )} />
+                  {tvConnected ? "LG TV подключён" : "LG TV не подключён"}
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (isVideoPlaying) {
+                      await hardwareService.tvStopVideo();
+                      setIsVideoPlaying(false);
+                    } else {
+                      // Strip leading slash for the media server URL builder in electron
+                      const rawPath = videoScene!.video!;
+                      const sent = await hardwareService.tvPlayVideo(rawPath);
+                      if (sent) {
+                        setIsVideoPlaying(true);
+                      }
                     }
-                  }
-                }}
-                className={cn(
-                  "absolute bottom-10 left-10 px-10 py-5 rounded-full font-black text-xl flex items-center gap-4 group overflow-hidden transition-all hover:scale-105",
-                  isVideoPlaying
-                    ? "bg-red-500 text-white shadow-[0_20px_50px_rgba(239,68,68,0.4)]"
-                    : "bg-primary text-white shadow-[0_20px_50px_rgba(200,161,97,0.4)]"
-                )}
-              >
-                <span className="relative flex items-center gap-4">
-                  <Icon name={isVideoPlaying ? "stop_circle" : "play_circle"} className="!text-3xl" />
-                  <span className="uppercase tracking-widest">
-                    {isVideoPlaying ? t("stopVideo") : t("video")}
+                  }}
+                  disabled={!tvConnected && !isVideoPlaying}
+                  className={cn(
+                    "px-10 py-5 rounded-full font-black text-xl flex items-center gap-4 group overflow-hidden transition-all",
+                    isVideoPlaying
+                      ? "bg-red-500 text-white shadow-[0_20px_50px_rgba(239,68,68,0.4)] hover:scale-105"
+                      : tvConnected
+                        ? "bg-primary text-white shadow-[0_20px_50px_rgba(200,161,97,0.4)] hover:scale-105"
+                        : "bg-gray-700/80 text-gray-400 cursor-not-allowed opacity-60"
+                  )}
+                >
+                  <span className="relative flex items-center gap-4">
+                    <Icon name={isVideoPlaying ? "stop_circle" : "play_circle"} className="!text-3xl" />
+                    <span className="uppercase tracking-widest">
+                      {isVideoPlaying ? t("stopVideo") : t("video")}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+              </div>
             )}
 
             {/* Navigation Arrows */}

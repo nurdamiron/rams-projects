@@ -15,6 +15,7 @@ import { InfoModal } from "@/components/modals/info-modal";
 import { AboutCompany } from "@/components/modals/about-company";
 import { AdminModal } from "@/components/modals/admin-modal";
 import { ActuatorControl } from "@/components/actuator-control";
+import { ControlPanel } from "@/components/control-panel";
 import { RAMS_PROJECTS } from "@/lib/data/projects";
 import { Project, Scene } from "@/lib/types";
 import { useTheme } from "@/lib/theme-context";
@@ -43,8 +44,8 @@ export default function Home() {
     projects: visibleProjects,  // Передаем список проектов для определения индекса
     enableActuators: true,
     enableLED: true,
-    animationDuration: 5000,  // 5 сек подъем
-    fadeInDuration: 3000,     // 3 сек плавное свечение
+    animationDuration: 2000,  // 2 сек подъем
+    fadeInDuration: 2000,     // 2 сек плавное свечение
   });
 
   // Load external projects if available
@@ -202,39 +203,17 @@ export default function Home() {
               </motion.div>
             )}
 
-            {/* Control Buttons */}
-            {projectSync.isConnected && !projectSync.isAnimating && (
-              <div className="fixed bottom-8 left-8 z-50 flex flex-col gap-3">
-                {/* Actuator Control Panel Button */}
-                <motion.button
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  onClick={() => setIsActuatorControlOpen(true)}
-                  className="bg-cyan-600/90 hover:bg-cyan-500/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 transition-all duration-300 hover:scale-105"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                  </svg>
-                  <span className="font-medium">Управление актуаторами</span>
-                </motion.button>
-
-                {/* Lower All Blocks Button */}
-                <motion.button
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ delay: 0.05 }}
-                  onClick={() => projectSync.lowerAllBlocks()}
-                  className="bg-orange-600/90 hover:bg-orange-500/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 transition-all duration-300 hover:scale-105"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                  <span className="font-medium">Опустить все блоки</span>
-                </motion.button>
-              </div>
-            )}
+            {/* Control Panel */}
+            <ControlPanel
+              esp32Client={projectSync.client}
+              isConnected={projectSync.isConnected}
+              isAnimating={projectSync.isAnimating}
+              onOpenActuatorControl={() => setIsActuatorControlOpen(true)}
+              onOpenAdmin={() => setIsAdminOpen(true)}
+              onLowerAllBlocks={() => projectSync.lowerAllBlocks()}
+              onEmergencyStop={() => projectSync.emergencyStop()}
+              onReconnect={() => window.location.reload()}
+            />
 
             {/* About Company Modal */}
             <AboutCompany
