@@ -1156,7 +1156,6 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('hardware-led-mode', async (_event, mode) => {
-    // Map mode names to effect IDs for svetdiod-project firmware
     const modeToEffect = {
       'STATIC': 0,
       'PULSE': 1,
@@ -1166,31 +1165,34 @@ app.whenReady().then(() => {
       'WAVE': 5,
       'FIRE': 6,
       'METEOR': 7,
-      'OFF': 0, // OFF = static with brightness 0
+      'OFF': 0,
     };
-    const effectId = modeToEffect[mode.toUpperCase()];
+    const upperMode = mode.toUpperCase();
+    const effectId = modeToEffect[upperMode];
+
     if (effectId !== undefined) {
       log(`[LED] Mode "${mode}" → effect ID ${effectId}`);
-      const result = await sendHttpRequest('/api/effect', { id: effectId });
-      // If OFF, also set brightness to 0
-      if (mode.toUpperCase() === 'OFF') {
+
+      if (upperMode === 'OFF') {
         await sendHttpRequest('/api/bri', { v: 0 });
+        return await sendHttpRequest('/api/effect', { id: 0 });
       }
-      return result;
+
+      // Restore brightness (in case it was OFF before), then set effect
+      await sendHttpRequest('/api/bri', { v: 200 });
+      return await sendHttpRequest('/api/effect', { id: effectId });
     }
-    // Fallback: try legacy endpoint
+
     return sendHttpRequest('/api/led', { mode });
   });
 
   ipcMain.handle('hardware-led-color', async (_event, hexColor) => {
-    // Parse hex color to RGB for svetdiod-project firmware
     const hex = hexColor.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16) || 0;
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
-    // Swap G and B — LED strip uses RBG color order
-    log(`[LED] Color #${hex} → RGB(${r}, ${g}, ${b}) → sent RBG(${r}, ${b}, ${g})`);
-    return sendHttpRequest('/api/color', { r, g: b, b: g });
+    log(`[LED] Color #${hex} → RGB(${r}, ${g}, ${b})`);
+    return sendHttpRequest('/api/color', { r, g, b });
   });
 
   ipcMain.handle('hardware-led-brightness', async (_event, brightness) => {
@@ -1238,8 +1240,7 @@ app.whenReady().then(() => {
       const r = parseInt(hex.substring(0, 2), 16) || 0;
       const g = parseInt(hex.substring(2, 4), 16) || 0;
       const b = parseInt(hex.substring(4, 6), 16) || 0;
-      // Swap G and B — LED strip uses RBG color order
-      return sendHttpRequest('/api/color', { r, g: b, b: g });
+      return sendHttpRequest('/api/color', { r, g, b });
     }
     if (cmd.startsWith('LED:BRIGHTNESS:')) return sendHttpRequest('/api/bri', { v: cmd.split(':')[2] });
     if (cmd.startsWith('BLOCK:')) {

@@ -126,13 +126,11 @@ export class ESP32Client {
 
   /**
    * Установить цвет LED
-   * Примечание: LED лента использует порядок RBG вместо RGB,
-   * поэтому меняем G и B местами перед отправкой
+   * Отправляет RGB напрямую — прошивка сама обрабатывает порядок байт
    */
   async setLEDColor(r: number, g: number, b: number): Promise<void> {
-    // Swap G and B — LED strip uses RBG color order
-    const url = `/api/color?r=${r}&g=${b}&b=${g}`;
-    console.log(`[ESP32Client] POST ${this.baseUrl}${url} (input RGB: ${r},${g},${b} → sent RBG: ${r},${b},${g})`);
+    const url = `/api/color?r=${r}&g=${g}&b=${b}`;
+    console.log(`[ESP32Client] POST ${this.baseUrl}${url} (RGB: ${r},${g},${b})`);
     const response = await this.fetchWithRetry(url, { method: "POST" });
     if (!response.ok) {
       console.error(`[ESP32Client] ❌ LED color failed`);
@@ -178,7 +176,6 @@ export class ESP32Client {
     const speedParam = speed !== undefined ? `&speed=${speed}` : "";
     const url = `/api/effect?id=${effectId}${speedParam}`;
     console.log(`[ESP32Client] 🎨 POST ${this.baseUrl}${url}`);
-    console.log(`[ESP32Client]    Effect: ${effectId}, Speed: ${speed ?? 'unchanged'}`);
 
     const startTime = Date.now();
     const response = await this.fetchWithRetry(url, { method: "POST" });
@@ -188,10 +185,7 @@ export class ESP32Client {
       console.error(`[ESP32Client] ❌ LED effect FAILED after ${elapsed}ms`);
       throw new Error(`Failed to set LED effect: ${response.statusText}`);
     }
-
-    const responseText = await response.text();
-    console.log(`[ESP32Client] ✅ LED effect set to ${effectId} SUCCESS after ${elapsed}ms`);
-    console.log(`[ESP32Client]    Response: ${responseText}`);
+    console.log(`[ESP32Client] ✅ LED effect set to ${effectId} after ${elapsed}ms`);
   }
 
   /**
@@ -206,7 +200,7 @@ export class ESP32Client {
   }
 
   /**
-   * Получить текущее состояние LED (только для svetdiod-project)
+   * Получить текущее состояние LED
    */
   async getLEDState(): Promise<LEDConfig & { zoneMask: number }> {
     const response = await this.fetchWithRetry("/api/state", { method: "GET" });

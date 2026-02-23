@@ -67,7 +67,7 @@ export function EffectControl({ esp32Client, className }: EffectControlProps) {
           <Sparkles className="w-4 h-4 text-cyan-400" />
           <span className="text-sm font-medium text-white">LED Effects</span>
           <span className="text-xs text-gray-400">
-            {EFFECTS[selectedEffect].name}
+            {EFFECTS[selectedEffect]?.name}
           </span>
         </div>
         {isExpanded ? (

@@ -523,8 +523,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   {/* LED Mode */}
                   <div className="bg-gray-800 rounded-xl p-5">
                     <h3 className="text-lg font-bold text-white mb-4">{t("ledMode")}</h3>
-                    <div className="grid grid-cols-5 gap-2">
-                      {["RAINBOW", "PULSE", "WAVE", "STATIC", "OFF"].map((mode) => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {["RAINBOW", "PULSE", "WAVE", "CHASE", "SPARKLE", "FIRE", "METEOR", "STATIC", "OFF"].map((mode) => (
                         <button
                           key={mode}
                           onClick={async () => {
