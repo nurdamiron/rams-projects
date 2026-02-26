@@ -119,14 +119,16 @@ export class ESP32Client {
   }
 
   /**
-   * LED УПРАВЛЕНИЕ (для svetdiod-project прошивки)
-   * Если используется rams_controller_v3.ino, эти методы не работают
-   * Нужно использовать svetdiod-project/main.cpp
+   * LED УПРАВЛЕНИЕ
+   * ESP32 v3.2 API: /api/effect, /api/color, /api/bri, /api/spd
+   *
+   * Рабочие эффекты на ESP32 v3.2: 3=Wave, 4=Pulse, 5=Sparkle, 6=Fire
+   * IDs 0-2 принимаются но визуально не меняются
+   * UI отправляет firmware ID напрямую (без маппинга)
    */
 
   /**
    * Установить цвет LED
-   * Отправляет RGB напрямую — прошивка сама обрабатывает порядок байт
    */
   async setLEDColor(r: number, g: number, b: number): Promise<void> {
     const url = `/api/color?r=${r}&g=${g}&b=${b}`;
@@ -173,9 +175,10 @@ export class ESP32Client {
    * @param speed Скорость эффекта (0-255, опционально)
    */
   async setLEDEffect(effectId: number, speed?: number): Promise<void> {
+    // Send firmware ID directly (no mapping needed for v3.2)
     const speedParam = speed !== undefined ? `&speed=${speed}` : "";
     const url = `/api/effect?id=${effectId}${speedParam}`;
-    console.log(`[ESP32Client] 🎨 POST ${this.baseUrl}${url}`);
+    console.log(`[ESP32Client] 🎨 POST ${this.baseUrl}${url} (FW:${effectId})`);
 
     const startTime = Date.now();
     const response = await this.fetchWithRetry(url, { method: "POST" });
@@ -185,38 +188,15 @@ export class ESP32Client {
       console.error(`[ESP32Client] ❌ LED effect FAILED after ${elapsed}ms`);
       throw new Error(`Failed to set LED effect: ${response.statusText}`);
     }
-    console.log(`[ESP32Client] ✅ LED effect set to ${effectId} after ${elapsed}ms`);
+    console.log(`[ESP32Client] ✅ LED effect set to FW:${effectId} after ${elapsed}ms`);
   }
 
   /**
-   * Установить зоны LED (битовая маска)
+   * Выключить LED (brightness=0)
    */
-  async setLEDZones(zoneMask: number): Promise<void> {
-    const url = `/api/zones?m=${zoneMask}`;
-    const response = await this.fetchWithRetry(url, { method: "POST" });
-    if (!response.ok) {
-      throw new Error(`Failed to set LED zones: ${response.statusText}`);
-    }
-  }
-
-  /**
-   * Получить текущее состояние LED
-   */
-  async getLEDState(): Promise<LEDConfig & { zoneMask: number }> {
-    const response = await this.fetchWithRetry("/api/state", { method: "GET" });
-    if (!response.ok) {
-      throw new Error(`Failed to get LED state: ${response.statusText}`);
-    }
-    const data = await response.json();
-    return {
-      r: data.r,
-      g: data.g,
-      b: data.b,
-      brightness: data.bri,
-      speed: data.spd,
-      effect: data.fx,
-      zoneMask: data.zm,
-    };
+  async setLEDOff(): Promise<void> {
+    await this.setLEDBrightness(0);
+    console.log(`[ESP32Client] ✅ LED OFF`);
   }
 
   /**

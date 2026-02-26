@@ -63,6 +63,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [hwPinging, setHwPinging] = React.useState(false);
   const [hwSavedIP, setHwSavedIP] = React.useState(false);
   const [hwLedMode, setHwLedMode] = React.useState("RAINBOW");
+  const [hwLedAutoCycle, setHwLedAutoCycle] = React.useState(false);
   const [hwBlockMapping, setHwBlockMapping] = React.useState<Record<string, number>>({});
   const [hwMappingSaved, setHwMappingSaved] = React.useState(false);
   // TV state
@@ -524,15 +525,39 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <div className="bg-gray-800 rounded-xl p-5">
                     <h3 className="text-lg font-bold text-white mb-4">{t("ledMode")}</h3>
                     <div className="grid grid-cols-3 gap-2">
-                      {["RAINBOW", "PULSE", "WAVE", "CHASE", "SPARKLE", "FIRE", "METEOR", "STATIC", "OFF"].map((mode) => (
+                      {/* AUTO button — prominent at the top */}
+                      <button
+                        onClick={async () => {
+                          const newState = !hwLedAutoCycle;
+                          setHwLedAutoCycle(newState);
+                          if (newState) {
+                            setHwLedMode("AUTO");
+                            await hardwareService.setLedMode("AUTO");
+                          } else {
+                            // Stop auto-cycle by sending AUTO again (toggle)
+                            await hardwareService.setLedMode("AUTO");
+                          }
+                        }}
+                        className={`col-span-3 px-3 py-3 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
+                          hwLedAutoCycle
+                            ? "bg-green-600 text-white shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                            : "bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-500 hover:to-blue-500"
+                        }`}
+                      >
+                        <span style={hwLedAutoCycle ? { display: "inline-block", animation: "spin 3s linear infinite" } : undefined}>&#x21bb;</span>
+                        {hwLedAutoCycle ? "AUTO ON (каждые 60с)" : "AUTO — смена эффектов"}
+                      </button>
+
+                      {["RAINBOW", "WAVE", "PULSE", "SPARKLE", "FIRE", "OFF"].map((mode) => (
                         <button
                           key={mode}
                           onClick={async () => {
                             setHwLedMode(mode);
+                            setHwLedAutoCycle(false);
                             await hardwareService.setLedMode(mode);
                           }}
                           className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                            hwLedMode === mode
+                            hwLedMode === mode && !hwLedAutoCycle
                               ? "bg-primary text-white"
                               : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                           }`}

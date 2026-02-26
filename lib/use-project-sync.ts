@@ -252,7 +252,7 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
         const ledTask = (async () => {
           // Установить цвет + эффект пока актуатор уже поднимается
           await client.setLEDColor(color.r, color.g, color.b);
-          await client.setLEDEffect(0); // Static mode
+          await client.setLEDEffect(3); // Wave mode (ESP32 v3.2: IDs 3-6 work)
           console.log(`[ProjectSync] 💡 Starting LED fade-in...`);
           await fadeInLED(color.r, color.g, color.b, opts.fadeInDuration || 3000, cancelToken);
         })();

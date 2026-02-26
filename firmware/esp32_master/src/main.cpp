@@ -14,12 +14,16 @@
  *
  * HTTP API:
  *   GET  /api/status              → JSON статус + оба IP
+ *   GET  /api/state               → текущее состояние LED (r,g,b,bri,spd,fx,zm)
  *   POST /api/block?num=N&action=up/down&duration=D → актуатор
  *   POST /api/all?action=down     → все вниз
  *   POST /api/stop                → экстренная остановка
- *   POST /api/led?mode=RAINBOW    → режим LED
- *   POST /api/led?color=FF0000    → цвет LED
- *   POST /api/led?brightness=200  → яркость LED
+ *   POST /api/led?mode=RAINBOW    → режим LED (legacy)
+ *   POST /api/effect?id=0-7&speed=0-255 → эффект по ID
+ *   POST /api/color?r=R&g=G&b=B  → RGB цвет
+ *   POST /api/bri?v=0-255         → яркость
+ *   POST /api/spd?v=0-255         → скорость анимации
+ *   POST /api/zones?m=bitmask     → зоны LED
  *
  * Подключение:
  *   Serial1 (TX=17, RX=16) → Mega #1 (Blocks 1–8)
@@ -66,12 +70,18 @@ int activeBlockCount = 0;
 // Block timers — auto-stop after duration
 unsigned long blockStopTime[TOTAL_BLOCKS + 1];
 
-// LED
-enum LedMode { LED_RAINBOW, LED_PULSE, LED_STATIC, LED_WAVE, LED_OFF };
+// LED — 8 effects + OFF (IDs match UI: 0=Static,1=Pulse,2=Rainbow,3=Chase,4=Sparkle,5=Wave,6=Fire,7=Meteor)
+enum LedMode { LED_STATIC=0, LED_PULSE=1, LED_RAINBOW=2, LED_CHASE=3, LED_SPARKLE=4, LED_WAVE=5, LED_FIRE=6, LED_METEOR=7, LED_OFF=8 };
 LedMode currentLedMode = LED_RAINBOW;
 uint32_t ledBaseColor   = 0x0000FF;
+uint8_t  ledSpeed       = 128;       // animation speed 0-255
 unsigned long lastLedUpdate = 0;
 uint16_t animCounter        = 0;
+
+// Auto-cycle: rotate effects every N seconds
+bool     autoCycleEnabled   = false;
+uint32_t autoCycleInterval  = 60000;  // ms (default 1 minute)
+unsigned long lastAutoCycle = 0;
 
 // Mega heartbeat
 unsigned long lastHeartbeatMega1 = 0;
@@ -101,6 +111,10 @@ void updateLeds();
 void ledRainbow();
 void ledPulse();
 void ledWave();
+void ledChase();
+void ledSparkle();
+void ledFire();
+void ledMeteor();
 void highlightBlock(int blockId, uint32_t color);
 void setupRoutes();
 
@@ -234,17 +248,21 @@ void handleStop() {
   Serial.println("[API] EMERGENCY STOP");
 }
 
-// POST /api/led?mode=RAINBOW|PULSE|WAVE|STATIC|OFF
+// POST /api/led?mode=RAINBOW|PULSE|WAVE|STATIC|CHASE|SPARKLE|FIRE|METEOR|OFF
 //              &color=FF0000
 //              &brightness=200
 void handleLed() {
   if (server.hasArg("mode")) {
     String mode = server.arg("mode");
     mode.toUpperCase();
-    if      (mode == "RAINBOW") currentLedMode = LED_RAINBOW;
+    if      (mode == "STATIC")  currentLedMode = LED_STATIC;
     else if (mode == "PULSE")   currentLedMode = LED_PULSE;
-    else if (mode == "STATIC")  currentLedMode = LED_STATIC;
+    else if (mode == "RAINBOW") currentLedMode = LED_RAINBOW;
+    else if (mode == "CHASE")   currentLedMode = LED_CHASE;
+    else if (mode == "SPARKLE") currentLedMode = LED_SPARKLE;
     else if (mode == "WAVE")    currentLedMode = LED_WAVE;
+    else if (mode == "FIRE")    currentLedMode = LED_FIRE;
+    else if (mode == "METEOR")  currentLedMode = LED_METEOR;
     else if (mode == "OFF")     currentLedMode = LED_OFF;
   }
   if (server.hasArg("color")) {
@@ -261,19 +279,136 @@ void handleLed() {
   sendJson(200, doc);
 }
 
+// POST /api/effect?id=0-7&speed=0-255
+void handleEffect() {
+  if (!server.hasArg("id")) {
+    JsonDocument err;
+    err["error"] = "id required";
+    sendJson(400, err);
+    return;
+  }
+  int id = server.arg("id").toInt();
+  if (id >= 0 && id <= 7) {
+    currentLedMode = (LedMode)id;
+  }
+  if (server.hasArg("speed")) {
+    ledSpeed = constrain(server.arg("speed").toInt(), 0, 255);
+  }
+  Serial.printf("[LED] Effect → %d, speed → %d\n", id, ledSpeed);
+  JsonDocument doc;
+  doc["ok"] = true;
+  doc["effect"] = id;
+  doc["speed"] = ledSpeed;
+  sendJson(200, doc);
+}
+
+// POST /api/color?r=0-255&g=0-255&b=0-255
+void handleColor() {
+  int r = server.hasArg("r") ? constrain(server.arg("r").toInt(), 0, 255) : 0;
+  int g = server.hasArg("g") ? constrain(server.arg("g").toInt(), 0, 255) : 0;
+  int b = server.hasArg("b") ? constrain(server.arg("b").toInt(), 0, 255) : 0;
+  ledBaseColor = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+  currentLedMode = LED_STATIC;
+  Serial.printf("[LED] Color → RGB(%d,%d,%d)\n", r, g, b);
+  JsonDocument doc;
+  doc["ok"] = true;
+  sendJson(200, doc);
+}
+
+// POST /api/bri?v=0-255
+void handleBrightness() {
+  int v = server.hasArg("v") ? constrain(server.arg("v").toInt(), 0, 255) : 200;
+  strip.setBrightness(v);
+  Serial.printf("[LED] Brightness → %d\n", v);
+  JsonDocument doc;
+  doc["ok"] = true;
+  sendJson(200, doc);
+}
+
+// POST /api/spd?v=0-255
+void handleSpeed() {
+  ledSpeed = server.hasArg("v") ? constrain(server.arg("v").toInt(), 0, 255) : 128;
+  Serial.printf("[LED] Speed → %d\n", ledSpeed);
+  JsonDocument doc;
+  doc["ok"] = true;
+  sendJson(200, doc);
+}
+
+// GET /api/state
+void handleState() {
+  JsonDocument doc;
+  doc["r"]   = (ledBaseColor >> 16) & 0xFF;
+  doc["g"]   = (ledBaseColor >>  8) & 0xFF;
+  doc["b"]   =  ledBaseColor        & 0xFF;
+  doc["bri"] = strip.getBrightness();
+  doc["spd"] = ledSpeed;
+  doc["fx"]  = (int)currentLedMode;
+  doc["zm"]  = 0xFFFF; // all zones active
+  doc["autoCycle"] = autoCycleEnabled;
+  doc["autoCycleInterval"] = autoCycleInterval / 1000;
+  sendJson(200, doc);
+}
+
+// POST /api/zones?m=bitmask
+void handleZones() {
+  // Zone support — placeholder, all LEDs treated as one zone for now
+  JsonDocument doc;
+  doc["ok"] = true;
+  sendJson(200, doc);
+}
+
+// POST /api/autocycle?enabled=1&interval=60
+// enabled: 0/1, interval: seconds (default 60)
+void handleAutoCycle() {
+  if (server.hasArg("enabled")) {
+    autoCycleEnabled = server.arg("enabled").toInt() != 0;
+    lastAutoCycle = millis(); // reset timer on toggle
+  }
+  if (server.hasArg("interval")) {
+    int sec = constrain(server.arg("interval").toInt(), 5, 3600);
+    autoCycleInterval = (uint32_t)sec * 1000;
+  }
+  Serial.printf("[LED] AutoCycle: %s, interval=%lus\n",
+    autoCycleEnabled ? "ON" : "OFF", autoCycleInterval / 1000);
+  JsonDocument doc;
+  doc["ok"] = true;
+  doc["autoCycle"] = autoCycleEnabled;
+  doc["interval"] = autoCycleInterval / 1000;
+  sendJson(200, doc);
+}
+
+// GET /api/autocycle — get current auto-cycle state
+void handleGetAutoCycle() {
+  JsonDocument doc;
+  doc["autoCycle"] = autoCycleEnabled;
+  doc["interval"] = autoCycleInterval / 1000;
+  doc["currentEffect"] = (int)currentLedMode;
+  sendJson(200, doc);
+}
+
 // ===================== SETUP ROUTES =====================
 void setupRoutes() {
   server.on("/api/status", HTTP_GET,  handleStatus);
+  server.on("/api/state",  HTTP_GET,  handleState);
   server.on("/api/block",  HTTP_POST, handleBlock);
   server.on("/api/all",    HTTP_POST, handleAll);
   server.on("/api/stop",   HTTP_POST, handleStop);
   server.on("/api/led",    HTTP_POST, handleLed);
+  server.on("/api/effect", HTTP_POST, handleEffect);
+  server.on("/api/color",  HTTP_POST, handleColor);
+  server.on("/api/bri",    HTTP_POST, handleBrightness);
+  server.on("/api/spd",    HTTP_POST, handleSpeed);
+  server.on("/api/zones",     HTTP_POST, handleZones);
+  server.on("/api/autocycle", HTTP_POST, handleAutoCycle);
+  server.on("/api/autocycle", HTTP_GET,  handleGetAutoCycle);
 
-  // CORS preflight
-  server.on("/api/block",  HTTP_OPTIONS, handleOptions);
-  server.on("/api/all",    HTTP_OPTIONS, handleOptions);
-  server.on("/api/stop",   HTTP_OPTIONS, handleOptions);
-  server.on("/api/led",    HTTP_OPTIONS, handleOptions);
+  // CORS preflight for all endpoints
+  const char* endpoints[] = {"/api/block", "/api/all", "/api/stop", "/api/led",
+                             "/api/effect", "/api/color", "/api/bri", "/api/spd",
+                             "/api/zones", "/api/state", "/api/status", "/api/autocycle"};
+  for (const char* ep : endpoints) {
+    server.on(ep, HTTP_OPTIONS, handleOptions);
+  }
 
   // 404
   server.onNotFound([]() {
@@ -355,6 +490,15 @@ void loop() {
   checkBlockTimers();
   checkMegaResponses();
   checkSafety();
+
+  // Auto-cycle effects
+  if (autoCycleEnabled && millis() - lastAutoCycle >= autoCycleInterval) {
+    lastAutoCycle = millis();
+    // Cycle through effects 0-7, skip OFF(8)
+    int next = ((int)currentLedMode + 1) % 8;
+    currentLedMode = (LedMode)next;
+    Serial.printf("[AutoCycle] Switched to effect %d\n", next);
+  }
 
   if (millis() - lastLedUpdate > 33) {
     updateLeds();
@@ -458,13 +602,20 @@ void checkSafety() {
 }
 
 // ===================== LED ANIMATION =====================
+// Speed factor: higher ledSpeed = faster animation
+static float speedFactor() { return 0.5f + (ledSpeed / 255.0f) * 3.0f; }
+
 void updateLeds() {
   animCounter++;
   switch (currentLedMode) {
-    case LED_RAINBOW: ledRainbow(); break;
-    case LED_PULSE:   ledPulse();   break;
-    case LED_WAVE:    ledWave();    break;
     case LED_STATIC:  strip.fill(ledBaseColor, 0, NUM_LEDS); break;
+    case LED_PULSE:   ledPulse();   break;
+    case LED_RAINBOW: ledRainbow(); break;
+    case LED_CHASE:   ledChase();   break;
+    case LED_SPARKLE: ledSparkle(); break;
+    case LED_WAVE:    ledWave();    break;
+    case LED_FIRE:    ledFire();    break;
+    case LED_METEOR:  ledMeteor();  break;
     case LED_OFF:     strip.clear(); break;
   }
   // Highlight active blocks
@@ -476,14 +627,16 @@ void updateLeds() {
 }
 
 void ledRainbow() {
+  float spd = speedFactor();
   for (int i = 0; i < NUM_LEDS; i++) {
-    uint16_t hue = (i * 65536L / NUM_LEDS + animCounter * 256) & 0xFFFF;
+    uint16_t hue = (i * 65536L / NUM_LEDS + (uint32_t)(animCounter * spd) * 256) & 0xFFFF;
     strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(hue)));
   }
 }
 
 void ledPulse() {
-  uint8_t brightness = (sin(animCounter * 0.05f) + 1.0f) * 127;
+  float spd = speedFactor();
+  uint8_t brightness = (sin(animCounter * 0.05f * spd) + 1.0f) * 127;
   uint8_t r = ((ledBaseColor >> 16) & 0xFF) * brightness / 255;
   uint8_t g = ((ledBaseColor >>  8) & 0xFF) * brightness / 255;
   uint8_t b = ( ledBaseColor        & 0xFF) * brightness / 255;
@@ -491,12 +644,96 @@ void ledPulse() {
 }
 
 void ledWave() {
+  float spd = speedFactor();
   for (int i = 0; i < NUM_LEDS; i++) {
-    uint8_t brightness = (sin((i + animCounter) * 0.1f) + 1.0f) * 127;
+    uint8_t brightness = (sin((i + animCounter * spd) * 0.1f) + 1.0f) * 127;
     uint8_t r = ((ledBaseColor >> 16) & 0xFF) * brightness / 255;
     uint8_t g = ((ledBaseColor >>  8) & 0xFF) * brightness / 255;
     uint8_t b = ( ledBaseColor        & 0xFF) * brightness / 255;
     strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+}
+
+void ledChase() {
+  float spd = speedFactor();
+  int chaseLen = 20;  // length of lit segment
+  strip.clear();
+  int pos = ((int)(animCounter * spd * 2)) % NUM_LEDS;
+  uint8_t r = (ledBaseColor >> 16) & 0xFF;
+  uint8_t g = (ledBaseColor >>  8) & 0xFF;
+  uint8_t b =  ledBaseColor        & 0xFF;
+  for (int i = 0; i < chaseLen; i++) {
+    int idx = (pos + i) % NUM_LEDS;
+    // Fade tail
+    uint8_t fade = 255 - (i * 255 / chaseLen);
+    strip.setPixelColor(idx, strip.Color(r * fade / 255, g * fade / 255, b * fade / 255));
+  }
+}
+
+void ledSparkle() {
+  // Dim all pixels slightly
+  for (int i = 0; i < NUM_LEDS; i++) {
+    uint32_t c = strip.getPixelColor(i);
+    uint8_t r = ((c >> 16) & 0xFF) * 220 / 256;
+    uint8_t g = ((c >>  8) & 0xFF) * 220 / 256;
+    uint8_t b = ( c        & 0xFF) * 220 / 256;
+    strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+  // Add random sparkles — more sparkles at higher speed
+  int numSparkles = 1 + ledSpeed / 32;
+  uint8_t cr = (ledBaseColor >> 16) & 0xFF;
+  uint8_t cg = (ledBaseColor >>  8) & 0xFF;
+  uint8_t cb =  ledBaseColor        & 0xFF;
+  for (int s = 0; s < numSparkles; s++) {
+    int idx = random(NUM_LEDS);
+    strip.setPixelColor(idx, strip.Color(cr, cg, cb));
+  }
+}
+
+void ledFire() {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    // Random heat variation
+    uint8_t heat = random(80, 255);
+    // Map heat to fire colors (red → orange → yellow)
+    uint8_t r, g, b;
+    if (heat < 170) {
+      r = heat;
+      g = heat / 3;
+      b = 0;
+    } else {
+      r = 255;
+      g = heat - 80;
+      b = (heat - 170) / 2;
+    }
+    strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+}
+
+void ledMeteor() {
+  float spd = speedFactor();
+  int meteorLen = 30;
+  // Fade all pixels
+  for (int i = 0; i < NUM_LEDS; i++) {
+    uint32_t c = strip.getPixelColor(i);
+    uint8_t r = ((c >> 16) & 0xFF) * 200 / 256;
+    uint8_t g = ((c >>  8) & 0xFF) * 200 / 256;
+    uint8_t b = ( c        & 0xFF) * 200 / 256;
+    // Random decay for organic look
+    if (random(10) > 5) {
+      strip.setPixelColor(i, strip.Color(r, g, b));
+    }
+  }
+  // Draw meteor head
+  int pos = ((int)(animCounter * spd * 3)) % (NUM_LEDS + meteorLen);
+  uint8_t cr = (ledBaseColor >> 16) & 0xFF;
+  uint8_t cg = (ledBaseColor >>  8) & 0xFF;
+  uint8_t cb =  ledBaseColor        & 0xFF;
+  for (int i = 0; i < meteorLen; i++) {
+    int idx = pos - i;
+    if (idx >= 0 && idx < NUM_LEDS) {
+      uint8_t fade = 255 - (i * 255 / meteorLen);
+      strip.setPixelColor(idx, strip.Color(cr * fade / 255, cg * fade / 255, cb * fade / 255));
+    }
   }
 }
 

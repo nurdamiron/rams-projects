@@ -104,9 +104,9 @@ export const Screensaver: React.FC<ScreensaverProps> = ({
   React.useEffect(() => {
     if (isActive) {
       hardwareService.resetAll();
-      hardwareService.setLedMode("RAINBOW");
+      hardwareService.setLedMode("RAINBOW"); // Rainbow = Wave + smooth color cycling
     } else {
-      hardwareService.setLedMode("STATIC");
+      hardwareService.setLedMode("WAVE");
     }
   }, [isActive]);
 

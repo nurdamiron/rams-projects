@@ -1155,35 +1155,124 @@ app.whenReady().then(() => {
     return sendHttpRequest('/api/all', { action: 'down' });
   });
 
+  // ---- LED Auto-Cycle + Rainbow state ----
+  let ledAutoCycleTimer = null;
+  let ledRainbowTimer = null;
+  let ledRainbowHue = 0;
+  let ledAutoCycleIndex = 0;
+  const LED_MODE_ORDER = ['WAVE', 'PULSE', 'SPARKLE', 'FIRE'];
+  const modeToFwId = {
+    'WAVE': 3, 'PULSE': 4, 'SPARKLE': 5, 'FIRE': 6,
+    'CHASE': 3, 'STATIC': 3, 'RAINBOW': 3, 'METEOR': 3,
+  };
+
+  // HSL to RGB for rainbow
+  function hslToRgb(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+  }
+
+  function startRainbowCycle() {
+    if (ledRainbowTimer) return;
+    log('[LED] Rainbow color cycling started');
+    ledRainbowTimer = setInterval(() => {
+      ledRainbowHue = (ledRainbowHue + 3) % 360;
+      const [r, g, b] = hslToRgb(ledRainbowHue, 100, 50);
+      sendHttpRequest('/api/color', { r, g, b }).catch(() => {});
+    }, 150);
+  }
+
+  function stopRainbowCycle() {
+    if (ledRainbowTimer) {
+      clearInterval(ledRainbowTimer);
+      ledRainbowTimer = null;
+      log('[LED] Rainbow color cycling stopped');
+    }
+  }
+
+  function stopLedAutoCycle() {
+    if (ledAutoCycleTimer) {
+      clearInterval(ledAutoCycleTimer);
+      ledAutoCycleTimer = null;
+      log('[LED] Auto-cycle stopped');
+    }
+    stopRainbowCycle();
+  }
+
   ipcMain.handle('hardware-led-mode', async (_event, mode) => {
-    const modeToEffect = {
-      'STATIC': 0,
-      'PULSE': 1,
-      'RAINBOW': 2,
-      'CHASE': 3,
-      'SPARKLE': 4,
-      'WAVE': 5,
-      'FIRE': 6,
-      'METEOR': 7,
-      'OFF': 0,
-    };
     const upperMode = mode.toUpperCase();
-    const effectId = modeToEffect[upperMode];
 
-    if (effectId !== undefined) {
-      log(`[LED] Mode "${mode}" → effect ID ${effectId}`);
-
-      if (upperMode === 'OFF') {
-        await sendHttpRequest('/api/bri', { v: 0 });
-        return await sendHttpRequest('/api/effect', { id: 0 });
+    // Handle AUTO mode — effects + rainbow color cycling
+    if (upperMode === 'AUTO') {
+      if (ledAutoCycleTimer) {
+        stopLedAutoCycle();
+        return { autoCycle: false };
       }
+      log('[LED] Auto-cycle started (60s interval) + rainbow colors');
+      ledAutoCycleIndex = 0;
 
-      // Restore brightness (in case it was OFF before), then set effect
+      // Start rainbow color cycling (smooth hue rotation)
       await sendHttpRequest('/api/bri', { v: 200 });
-      return await sendHttpRequest('/api/effect', { id: effectId });
+      await sendHttpRequest('/api/effect', { id: 3 }); // Wave as base
+      startRainbowCycle();
+
+      // Switch effects every 60 seconds
+      const cycleFn = async () => {
+        const modeName = LED_MODE_ORDER[ledAutoCycleIndex % LED_MODE_ORDER.length];
+        const fwId = modeToFwId[modeName];
+        log(`[LED AutoCycle] → ${modeName} (FW id=${fwId}) + rainbow`);
+        await sendHttpRequest('/api/effect', { id: fwId });
+        ledAutoCycleIndex++;
+      };
+      await cycleFn();
+      ledAutoCycleTimer = setInterval(cycleFn, 60 * 1000);
+      return { autoCycle: true };
     }
 
-    return sendHttpRequest('/api/led', { mode });
+    // Handle RAINBOW mode (manual)
+    if (upperMode === 'RAINBOW') {
+      stopLedAutoCycle();
+      log('[LED] Rainbow mode — wave + color cycling');
+      await sendHttpRequest('/api/bri', { v: 200 });
+      await sendHttpRequest('/api/effect', { id: 3 });
+      startRainbowCycle();
+      return true;
+    }
+
+    // Any other mode stops auto-cycle and rainbow
+    stopLedAutoCycle();
+
+    // Handle OFF — just set brightness to 0
+    if (upperMode === 'OFF') {
+      log(`[LED] Mode OFF — brightness 0`);
+      return await sendHttpRequest('/api/bri', { v: 0 });
+    }
+
+    const fwId = modeToFwId[upperMode];
+    if (typeof fwId === 'number') {
+      log(`[LED] Mode "${mode}" → FW effect ID ${fwId}`);
+      await sendHttpRequest('/api/bri', { v: 200 });
+      return await sendHttpRequest('/api/effect', { id: fwId });
+    }
+    return false;
+  });
+
+  // Direct effect ID (used by actuator-control panel) — sends firmware ID as-is
+  ipcMain.handle('hardware-led-effect', async (_event, effectId, speed) => {
+    const params = { id: effectId };
+    if (speed !== undefined && speed !== null) params.speed = speed;
+    log(`[LED] Effect FW:${effectId}${speed !== undefined ? ` speed=${speed}` : ''}`);
+    stopLedAutoCycle(); // manual effect change stops auto-cycle
+    await sendHttpRequest('/api/bri', { v: 200 }); // ensure brightness is on
+    return sendHttpRequest('/api/effect', params);
+  });
+
+  ipcMain.handle('hardware-led-speed', async (_event, speed) => {
+    log(`[LED] Speed → ${speed}`);
+    return sendHttpRequest('/api/spd', { v: speed });
   });
 
   ipcMain.handle('hardware-led-color', async (_event, hexColor) => {
@@ -1230,10 +1319,10 @@ app.whenReady().then(() => {
     if (cmd === 'ALL:STOP') return sendHttpRequest('/api/stop');
     if (cmd === 'ALL:DOWN') return sendHttpRequest('/api/all', { action: 'down' });
     if (cmd.startsWith('LED:MODE:')) {
-      const modeMap = { 'STATIC': 0, 'PULSE': 1, 'RAINBOW': 2, 'CHASE': 3, 'SPARKLE': 4, 'WAVE': 5, 'FIRE': 6, 'METEOR': 7, 'OFF': 0 };
-      const effectId = modeMap[cmd.split(':')[2].toUpperCase()];
-      if (effectId !== undefined) return sendHttpRequest('/api/effect', { id: effectId });
-      return sendHttpRequest('/api/led', { mode: cmd.split(':')[2] });
+      const modeToFwId = { 'STATIC': 2, 'PULSE': 1, 'RAINBOW': 0, 'CHASE': 3, 'SPARKLE': 5, 'WAVE': 3, 'FIRE': 6, 'METEOR': 7, 'OFF': 4 };
+      const fwId = modeToFwId[cmd.split(':')[2].toUpperCase()];
+      if (fwId !== undefined) return sendHttpRequest('/api/effect', { id: fwId });
+      return false;
     }
     if (cmd.startsWith('LED:COLOR:')) {
       const hex = cmd.split(':')[2].replace('#', '');
@@ -1242,7 +1331,9 @@ app.whenReady().then(() => {
       const b = parseInt(hex.substring(4, 6), 16) || 0;
       return sendHttpRequest('/api/color', { r, g, b });
     }
-    if (cmd.startsWith('LED:BRIGHTNESS:')) return sendHttpRequest('/api/bri', { v: cmd.split(':')[2] });
+    if (cmd.startsWith('LED:BRIGHTNESS:')) {
+      return sendHttpRequest('/api/bri', { v: cmd.split(':')[2] });
+    }
     if (cmd.startsWith('BLOCK:')) {
       const parts = cmd.split(':');
       return sendHttpRequest('/api/block', { num: parts[1], action: parts[2].toLowerCase(), duration: BLOCK_DURATION_MS });
