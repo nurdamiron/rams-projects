@@ -14,24 +14,17 @@ interface ActuatorControlProps {
   className?: string;
 }
 
-// Effects on ESP32 v3.2: FW IDs 3-6 work, "rainbow" is client-side color cycling
-const RAINBOW_ID = -1; // special: client-side rainbow via /api/color
+// All 8 effects available in ESP32 firmware (main.cpp:610-709)
 const LED_EFFECTS = [
-  { id: RAINBOW_ID, name: "Радуга", icon: "🌈" },
-  { id: 3, name: "Волна", icon: "〜" },
-  { id: 4, name: "Пульс", icon: "◉" },
-  { id: 5, name: "Искры", icon: "✨" },
+  { id: 0, name: "Статик", icon: "⬤" },
+  { id: 1, name: "Пульс", icon: "◉" },
+  { id: 2, name: "Радуга", icon: "🌈" },
+  { id: 3, name: "Бег", icon: "➜" },
+  { id: 4, name: "Искры", icon: "✨" },
+  { id: 5, name: "Волна", icon: "〜" },
   { id: 6, name: "Огонь", icon: "🔥" },
+  { id: 7, name: "Метеор", icon: "☄" },
 ];
-
-// HSL to RGB conversion for rainbow cycling
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  s /= 100; l /= 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
 
 export function ActuatorControl({ onClose, className = "" }: ActuatorControlProps) {
   const [client] = React.useState(() => createLocalESP32Client());
@@ -45,7 +38,7 @@ export function ActuatorControl({ onClose, className = "" }: ActuatorControlProp
   const [ledColor, setLedColor] = React.useState("#00BFFF");
   const [ledBrightness, setLedBrightness] = React.useState(200);
   const [ledSpeed, setLedSpeed] = React.useState(128);
-  const [ledEffect, setLedEffect] = React.useState(3); // default to first working effect
+  const [ledEffect, setLedEffect] = React.useState(5); // default to Wave (ID 5)
   const [autoCycle, setAutoCycle] = React.useState(false);
   const [cycleInterval, setCycleInterval] = React.useState(60);
 
@@ -162,69 +155,23 @@ export function ActuatorControl({ onClose, className = "" }: ActuatorControlProp
     }
   };
 
-  // Rainbow color cycling timer
-  const rainbowRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  const rainbowHueRef = React.useRef(0);
-
-  const startRainbow = React.useCallback(() => {
-    if (rainbowRef.current) return; // already running
-    console.log("[Rainbow] Starting color cycle");
-    rainbowRef.current = setInterval(async () => {
-      rainbowHueRef.current = (rainbowHueRef.current + 3) % 360; // smooth step
-      const [r, g, b] = hslToRgb(rainbowHueRef.current, 100, 50);
-      try {
-        if (electronApi?.setLedColor) {
-          const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-          await electronApi.setLedColor(hex);
-        } else {
-          await client.setLEDColor(r, g, b);
-        }
-      } catch { /* throttle errors */ }
-    }, 150); // update every 150ms for smooth rainbow
-  }, [electronApi, client]);
-
-  const stopRainbow = React.useCallback(() => {
-    if (rainbowRef.current) {
-      clearInterval(rainbowRef.current);
-      rainbowRef.current = null;
-      console.log("[Rainbow] Stopped");
-    }
-  }, []);
-
-  // Cleanup rainbow on unmount
-  React.useEffect(() => () => stopRainbow(), [stopRainbow]);
-
   const handleEffectChange = async (effectId: number) => {
     setLedEffect(effectId);
     if (autoCycle) setAutoCycle(false);
 
-    if (effectId === RAINBOW_ID) {
-      // Rainbow = set base effect to Wave + cycle colors
-      try {
-        if (electronApi?.setLedEffect) {
-          await electronApi.setLedEffect(3); // Wave as base
-        } else {
-          await client.setLEDEffect(3);
-        }
-      } catch {}
-      startRainbow();
-      return;
-    }
-
-    // Stop rainbow if switching to another effect
-    stopRainbow();
     try {
       if (electronApi?.setLedEffect) {
         await electronApi.setLedEffect(effectId);
       } else {
         await client.setLEDEffect(effectId);
       }
+      console.log(`[LED] Effect changed to ID ${effectId}`);
     } catch (err) {
       console.error("Failed to set LED effect:", err);
     }
   };
 
-  // Auto-cycle: smooth rainbow color cycling between effect switches
+  // Auto-cycle: switch between effects
   const autoCycleRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const ledEffectRef = React.useRef(ledEffect);
   ledEffectRef.current = ledEffect;
@@ -235,15 +182,10 @@ export function ActuatorControl({ onClose, className = "" }: ActuatorControlProp
       autoCycleRef.current = null;
     }
     if (autoCycle) {
-      // Start rainbow color cycling during auto mode
-      startRainbow();
-
       const switchNext = async () => {
-        // Cycle through non-rainbow effects
-        const fwEffects = LED_EFFECTS.filter(e => e.id !== RAINBOW_ID);
-        const currentIdx = fwEffects.findIndex(e => e.id === ledEffectRef.current);
-        const nextIdx = (currentIdx + 1) % fwEffects.length;
-        const nextEffect = fwEffects[nextIdx];
+        const currentIdx = LED_EFFECTS.findIndex(e => e.id === ledEffectRef.current);
+        const nextIdx = (currentIdx + 1) % LED_EFFECTS.length;
+        const nextEffect = LED_EFFECTS[nextIdx];
         setLedEffect(nextEffect.id);
         try {
           if (electronApi?.setLedEffect) {
@@ -251,22 +193,17 @@ export function ActuatorControl({ onClose, className = "" }: ActuatorControlProp
           } else {
             await client.setLEDEffect(nextEffect.id);
           }
-          console.log(`[AutoCycle] → ${nextEffect.name} (fwId=${nextEffect.id}) + rainbow colors`);
+          console.log(`[AutoCycle] → ${nextEffect.name} (FW ID=${nextEffect.id})`);
         } catch (err) {
           console.error("Auto-cycle failed:", err);
         }
       };
       autoCycleRef.current = setInterval(switchNext, cycleInterval * 1000);
-    } else {
-      // Stop rainbow when auto-cycle disabled (unless rainbow effect is selected)
-      if (ledEffectRef.current !== RAINBOW_ID) {
-        stopRainbow();
-      }
     }
     return () => {
       if (autoCycleRef.current) clearInterval(autoCycleRef.current);
     };
-  }, [autoCycle, cycleInterval, client, electronApi, startRainbow, stopRainbow]);
+  }, [autoCycle, cycleInterval, client, electronApi]);
 
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm ${className}`}>

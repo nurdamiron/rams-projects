@@ -6,12 +6,16 @@ import { Sparkles, Waves, Flame, Zap, ChevronDown, ChevronUp, RefreshCw } from "
 import { ESP32Client } from "@/lib/esp32-client"
 import { cn } from "@/lib/utils"
 
-// Only effects confirmed working on ESP32 v3.2 firmware
+// All 8 effects available in ESP32 firmware (main.cpp:610-709)
 const EFFECTS = [
-  { id: 3, name: "Wave", icon: Waves, description: "Волна" },
-  { id: 4, name: "Pulse", icon: Zap, description: "Пульсация" },
-  { id: 5, name: "Sparkle", icon: Sparkles, description: "Искры" },
+  { id: 0, name: "Static", icon: Zap, description: "Статичный цвет" },
+  { id: 1, name: "Pulse", icon: Zap, description: "Пульсация" },
+  { id: 2, name: "Rainbow", icon: Sparkles, description: "Радуга" },
+  { id: 3, name: "Chase", icon: Waves, description: "Бегущий огонь" },
+  { id: 4, name: "Sparkle", icon: Sparkles, description: "Искры" },
+  { id: 5, name: "Wave", icon: Waves, description: "Волна" },
   { id: 6, name: "Fire", icon: Flame, description: "Огонь" },
+  { id: 7, name: "Meteor", icon: Zap, description: "Метеор" },
 ]
 
 interface EffectControlProps {
@@ -131,7 +135,7 @@ export function EffectControl({ esp32Client, className }: EffectControlProps) {
           >
             <div className="p-4 space-y-4">
               {/* Effect Buttons */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
                 {EFFECTS.map((effect) => {
                   const Icon = effect.icon
                   const isActive = selectedEffect === effect.id
