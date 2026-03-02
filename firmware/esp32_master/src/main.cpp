@@ -60,7 +60,7 @@ const char* STA_PASSWORD = "Rams2021";
 
 // ===================== GLOBALS =====================
 WebServer server(80);
-Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_RGB + NEO_KHZ800);
+Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 enum BlockState { STATE_STOP = 0, STATE_UP = 1, STATE_DOWN = -1 };
 BlockState blockStates[TOTAL_BLOCKS + 1];
