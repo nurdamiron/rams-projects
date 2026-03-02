@@ -57,8 +57,8 @@ export interface ProjectSyncOptions {
 const DEFAULT_OPTIONS: ProjectSyncOptions = {
   enableActuators: true,
   enableLED: true,
-  animationDuration: 4000,  // 4 секунды подъем
-  fadeInDuration: 4000,     // 4 секунды плавное свечение
+  animationDuration: 4000,  // 4 сек — физический подъём актуатора
+  fadeInDuration: 4000,       // 4 секунды плавное свечение
   autoConnect: true,
 };
 
@@ -139,7 +139,7 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
     duration: number,
     cancelToken: { cancelled: boolean }
   ) => {
-    const steps = 10;
+    const steps = 20; // More steps = smoother fade
     const stepDelay = duration / steps;
 
     for (let i = 1; i <= steps; i++) {
@@ -148,14 +148,13 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
         return;
       }
 
-      // Квадратичная кривая: шаг 1→20, 2→40, ... быстро набирает яркость
-      const t = i / steps; // 0.1 → 1.0
-      const brightness = Math.floor(t * t * 200); // quadratic easing
+      // Smooth cubic ease-out: быстрый старт, плавное замедление к концу
+      const t = i / steps; // 0.05 → 1.0
+      const brightness = Math.floor(t * t * t * 200); // cubic easing
       try {
         const start = Date.now();
         await client.setLEDBrightness(brightness);
         const elapsed = Date.now() - start;
-        // Вычитаем время HTTP запроса из задержки
         const remaining = Math.max(0, stepDelay - elapsed);
         if (remaining > 0) {
           await new Promise(resolve => setTimeout(resolve, remaining));
@@ -225,44 +224,19 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
     console.log(`[ProjectSync] LED Color: RGB(${color.r}, ${color.g}, ${color.b})`);
 
     try {
-      // Фаза 1: Только brightness(0) — 1 HTTP вызов (~100мс)
-      // Предотвращает вспышку при lightUpBlock(), цвет не важен при яркости 0
-      if (opts.enableLED) {
-        console.log(`[ProjectSync] Setting LED brightness to 0 (pre-raise)...`);
-        await client.setLEDBrightness(0);
-      }
-
-      // Фаза 2: Всё параллельно — актуатор стартует СРАЗУ
-      const tasks = [];
-
+      // Поднять блок — прямой HTTP к ESP32
+      // duration=30000 чтобы STATE_UP держался 30 сек (LED зона горит белым)
+      // Физически блок остановится по концевику за ~4 сек, но LED будет гореть
       if (opts.enableActuators && blocks.length > 0) {
-        console.log(`[ProjectSync] Starting actuator raise sequence...`);
-        const actuatorTask = (async () => {
-          for (let i = 0; i < blocks.length; i++) {
-            console.log(`[ProjectSync] 📈 Raising block ${blocks[i]} (${i + 1}/${blocks.length})...`);
-            await client.blockUp(blocks[i], opts.animationDuration);
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-          console.log(`[ProjectSync] ✅ All blocks raised`);
-        })();
-        tasks.push(actuatorTask);
+        for (let i = 0; i < blocks.length; i++) {
+          console.log(`[ProjectSync] 📈 Raising block ${blocks[i]} (${i + 1}/${blocks.length})...`);
+          await client.blockUp(blocks[i], opts.animationDuration);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        console.log(`[ProjectSync] ✅ All blocks raised`);
       }
-
-      if (opts.enableLED) {
-        const ledTask = (async () => {
-          // Установить цвет + эффект пока актуатор уже поднимается
-          await client.setLEDColor(color.r, color.g, color.b);
-          await client.setLEDEffect(3); // Wave mode (ESP32 v3.2: IDs 3-6 work)
-          console.log(`[ProjectSync] 💡 Starting LED fade-in...`);
-          await fadeInLED(color.r, color.g, color.b, opts.fadeInDuration || 3000, cancelToken);
-        })();
-        tasks.push(ledTask);
-      }
-
-      await Promise.all(tasks);
 
       console.log(`[ProjectSync] ✅ Activated project: ${project.name}`);
-      console.log(`[ProjectSync] ✅ LED will stay ON until project exit`);
       console.log(`[ProjectSync] ============ ACTIVATION END ============`);
       setHwStatus('activated');
     } catch (err) {
@@ -290,14 +264,13 @@ export function useProjectSync(options: ProjectSyncOptions = {}) {
 
     try {
       if (opts.enableActuators && blocks.length > 0) {
-        console.log(`[ProjectSync] 📉 Lowering blocks with smooth LED fade (3s)...`);
+        console.log(`[ProjectSync] 📉 Lowering blocks...`);
         for (const blockNum of blocks) {
           await client.blockDown(blockNum, 5000);
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-        console.log(`[ProjectSync] ✅ Blocks lowered, LED faded out`);
+        console.log(`[ProjectSync] ✅ Blocks lowered`);
       } else if (blocks.length > 0) {
-        console.log(`[ProjectSync] 💡 Turning off LED zones (actuators disabled)...`);
         for (const blockNum of blocks) {
           await client.blockStop(blockNum);
         }

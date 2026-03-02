@@ -9,7 +9,6 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Project, Scene } from "@/lib/types";
-import { hardwareService } from "@/lib/hardware-service";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { getMediaUrl } from "@/lib/media-utils";
@@ -151,15 +150,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
     return () => clearInterval(timer);
   }, [allScenes.length]);
 
-  // Initialize hardware
-  React.useEffect(() => {
-    if (allProjects.length > 0) {
-      hardwareService.selectProject(allProjects[0].id);
-      return () => {
-        hardwareService.deselectProject(allProjects[0].id);
-      };
-    }
-  }, [allProjects]);
+  // Hardware управляется через ProjectSync в page.tsx — здесь не дублируем
 
   const imageSource = activeScene ? getMediaUrl(activeScene.image || allProjects[0].heroImage || allProjects[0].image) : "";
 
