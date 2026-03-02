@@ -26,8 +26,8 @@
  *   POST /api/zones?m=bitmask     → зоны LED
  *
  * Подключение:
- *   Serial1 (TX=17, RX=16) → Mega #1 (Blocks 1–8)
- *   Serial2 (TX=4,  RX=5)  → Mega #2 (Blocks 9–15)
+ *   Serial1 (TX=25, RX=26) → Mega #1 (Blocks 1–8)
+ *   Serial2 (TX=16, RX=17) → Mega #2 (Blocks 9–15)
  *   GPIO 23                → WS2812B LED Data
  */
 
@@ -53,10 +53,10 @@ const char* STA_PASSWORD = "Rams2021";
 #define NUM_LEDS       900
 #define LED_BRIGHTNESS 200
 
-#define MEGA1_TX 17
-#define MEGA1_RX 16
-#define MEGA2_TX 4
-#define MEGA2_RX 5
+#define MEGA1_TX 25
+#define MEGA1_RX 26
+#define MEGA2_TX 16
+#define MEGA2_RX 17
 
 // ===================== GLOBALS =====================
 WebServer server(80);
@@ -70,10 +70,6 @@ int activeBlockCount = 0;
 
 // Block timers — auto-stop after duration
 unsigned long blockStopTime[TOTAL_BLOCKS + 1];
-
-// Block animation timers — smooth fade in/out
-unsigned long blockAnimStartTime[TOTAL_BLOCKS + 1];
-#define BLOCK_ANIM_DURATION 4000  // 4 seconds for smooth fade
 
 // LED — 8 effects + OFF (IDs match UI: 0=Static,1=Pulse,2=Rainbow,3=Chase,4=Sparkle,5=Wave,6=Fire,7=Meteor)
 enum LedMode { LED_STATIC=0, LED_PULSE=1, LED_RAINBOW=2, LED_CHASE=3, LED_SPARKLE=4, LED_WAVE=5, LED_FIRE=6, LED_METEOR=7, LED_OFF=8 };
@@ -120,8 +116,7 @@ void ledChase();
 void ledSparkle();
 void ledFire();
 void ledMeteor();
-void animateBlockUp(int blockId, uint32_t targetColor);
-void animateBlockDown(int blockId, uint32_t targetColor);
+void highlightBlock(int blockId, uint32_t color);
 void setupRoutes();
 
 // ===================== HTTP HELPERS =====================
@@ -211,18 +206,9 @@ void handleBlock() {
     blockStopTime[blockNum] = 0;
   }
 
-  if      (action == ACTION_UP) {
-    blockStates[blockNum] = STATE_UP;
-    blockAnimStartTime[blockNum] = millis();  // Start fade-in animation
-  }
-  else if (action == ACTION_DOWN) {
-    blockStates[blockNum] = STATE_DOWN;
-    blockAnimStartTime[blockNum] = millis();  // Start fade-out animation
-  }
-  else if (action == ACTION_STOP) {
-    blockStates[blockNum] = STATE_STOP;
-    blockAnimStartTime[blockNum] = 0;
-  }
+  if      (action == ACTION_UP)   blockStates[blockNum] = STATE_UP;
+  else if (action == ACTION_DOWN) blockStates[blockNum] = STATE_DOWN;
+  else if (action == ACTION_STOP) blockStates[blockNum] = STATE_STOP;
 
   routeToMega(blockNum, action);
 
@@ -446,7 +432,6 @@ void setup() {
   for (int i = 0; i <= TOTAL_BLOCKS; i++) {
     blockStates[i]   = STATE_STOP;
     blockStopTime[i] = 0;
-    blockAnimStartTime[i] = 0;
   }
 
   // LED init
@@ -489,14 +474,16 @@ void setup() {
 
   // ===== OTA (Over-The-Air) Setup =====
   ArduinoOTA.setHostname("RAMS-ESP32");
-  ArduinoOTA.setPassword("rams2024");  // OTA password
+  ArduinoOTA.setPassword("rams2024");
 
   ArduinoOTA.onStart([]() {
-    String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
-    Serial.println("[OTA] Update Start: " + type);
+    Serial.println("[OTA] Update Start");
     // Stop LED updates during OTA
+    currentLedMode = LED_OFF;
     strip.clear();
     strip.show();
+    // Stop all blocks for safety
+    sendAllStop();
   });
 
   ArduinoOTA.onEnd([]() {
@@ -530,13 +517,13 @@ void setup() {
   Serial.printf("[RAMS] AP:  http://%s/api/status\n", WiFi.softAPIP().toString().c_str());
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("[RAMS] STA: http://%s/api/status\n", WiFi.localIP().toString().c_str());
-    Serial.println("[OTA]  Upload firmware using: platformio run -t upload --upload-port RAMS-ESP32.local");
+    Serial.println("[OTA] Upload: platformio run -t upload --upload-port RAMS-ESP32.local");
   }
 }
 
 // ===================== LOOP =====================
 void loop() {
-  ArduinoOTA.handle();  // Handle OTA updates
+  ArduinoOTA.handle();
   server.handleClient();
   checkBlockTimers();
   checkMegaResponses();
@@ -570,12 +557,11 @@ void checkBlockTimers() {
   unsigned long now = millis();
   for (int i = 1; i <= TOTAL_BLOCKS; i++) {
     if (blockStates[i] == STATE_UP && blockStopTime[i] > 0 && now >= blockStopTime[i]) {
-      // Safety: stop motor via Mega, but keep blockState=UP so LED stays on
+      blockStates[i]   = STATE_STOP;
       blockStopTime[i] = 0;
       activeBlockCount = max(0, activeBlockCount - 1);
       routeToMega(i, ACTION_STOP);
-      Serial.printf("[Timer] Block %d motor stopped (LED stays on)\n", i);
-      // NOTE: blockStates[i] remains STATE_UP → LED continues to shine
+      Serial.printf("[Timer] Block %d auto-stopped\n", i);
     }
   }
 }
@@ -594,7 +580,6 @@ void sendAllStop() {
   for (int i = 1; i <= TOTAL_BLOCKS; i++) {
     blockStates[i]   = STATE_STOP;
     blockStopTime[i] = 0;
-    blockAnimStartTime[i] = 0;
   }
   activeBlockCount = 0;
   Serial1.println("ALL:STOP");
@@ -607,7 +592,6 @@ void sendAllDown() {
     if (blockStates[i] == STATE_UP) {
       blockStates[i]   = STATE_DOWN;
       blockStopTime[i] = 0;
-      blockAnimStartTime[i] = millis();  // Start fade-out animation
       routeToMega(i, ACTION_DOWN);
       delay(STAGGER_DELAY_MS);
     }
@@ -641,7 +625,6 @@ void checkSafety() {
     for (int i = MEGA1_BLOCK_START; i <= MEGA1_BLOCK_END; i++) {
       if (blockStates[i] == STATE_UP) activeBlockCount = max(0, activeBlockCount - 1);
       blockStates[i] = STATE_STOP;
-      blockAnimStartTime[i] = 0;
     }
   }
 
@@ -652,7 +635,6 @@ void checkSafety() {
     for (int i = MEGA2_BLOCK_START; i <= MEGA2_BLOCK_END; i++) {
       if (blockStates[i] == STATE_UP) activeBlockCount = max(0, activeBlockCount - 1);
       blockStates[i] = STATE_STOP;
-      blockAnimStartTime[i] = 0;
     }
   }
 }
@@ -674,20 +656,21 @@ void updateLeds() {
     case LED_METEOR:  ledMeteor();  break;
     case LED_OFF:     strip.clear(); break;
   }
-  // Highlight active blocks (instant, no animation for now)
+  // Soft highlight for DOWN blocks only (UP blocks don't interfere with effects)
   for (int i = 1; i <= TOTAL_BLOCKS; i++) {
-    if (blockStates[i] == STATE_UP) {
-      // Simple instant highlight - light blue
+    if (blockStates[i] == STATE_DOWN) {
+      // Soft orange overlay (30% opacity) - doesn't kill the effect
       LedSegment seg = blockLeds[i];
       for (int j = seg.start; j < seg.start + seg.count && j < NUM_LEDS; j++) {
-        strip.setPixelColor(j, strip.Color(80, 180, 255));
-      }
-    }
-    else if (blockStates[i] == STATE_DOWN) {
-      // Simple instant highlight - orange
-      LedSegment seg = blockLeds[i];
-      for (int j = seg.start; j < seg.start + seg.count && j < NUM_LEDS; j++) {
-        strip.setPixelColor(j, strip.Color(255, 100, 0));
+        uint32_t current = strip.getPixelColor(j);
+        uint8_t r = ((current >> 16) & 0xFF);
+        uint8_t g = ((current >>  8) & 0xFF);
+        uint8_t b = ( current        & 0xFF);
+        // Blend with soft orange (255,80,0) at 30%
+        r = (r * 7 + 255 * 3) / 10;
+        g = (g * 7 +  80 * 3) / 10;
+        b = (b * 7 +   0 * 3) / 10;
+        strip.setPixelColor(j, strip.Color(r, g, b));
       }
     }
   }
@@ -805,70 +788,10 @@ void ledMeteor() {
   }
 }
 
-// Smooth fade-in animation for block going UP (bottom to top fill + brightness fade)
-void animateBlockUp(int blockId, uint32_t targetColor) {
+void highlightBlock(int blockId, uint32_t color) {
   if (blockId < 1 || blockId > TOTAL_BLOCKS) return;
-  if (blockAnimStartTime[blockId] == 0) return;  // Fix: skip if not initialized
-
-  unsigned long elapsed = millis() - blockAnimStartTime[blockId];
-  float progress = min(1.0f, (float)elapsed / BLOCK_ANIM_DURATION);
-
   LedSegment seg = blockLeds[blockId];
-  int ledsToLight = (int)(seg.count * progress);  // Fill from bottom to top
-
-  // Extract RGB components
-  uint8_t r = (targetColor >> 16) & 0xFF;
-  uint8_t g = (targetColor >> 8) & 0xFF;
-  uint8_t b = targetColor & 0xFF;
-
-  // Smooth brightness curve (ease-in-out)
-  float brightness = (sin((progress - 0.5f) * PI) + 1.0f) / 2.0f;
-
-  for (int i = 0; i < seg.count && seg.start + i < NUM_LEDS; i++) {
-    int ledIdx = seg.start + i;
-
-    if (i < ledsToLight) {
-      // Lit LEDs with fade
-      uint8_t fade = (uint8_t)(brightness * 255);
-      strip.setPixelColor(ledIdx, strip.Color(r * fade / 255, g * fade / 255, b * fade / 255));
-    }
-    // LEDs above the fill line stay with background effect
-  }
-}
-
-// Smooth fade-out animation for block going DOWN (top to bottom fade)
-void animateBlockDown(int blockId, uint32_t targetColor) {
-  if (blockId < 1 || blockId > TOTAL_BLOCKS) return;
-  if (blockAnimStartTime[blockId] == 0) return;  // Fix: skip if not initialized
-
-  unsigned long elapsed = millis() - blockAnimStartTime[blockId];
-  float progress = min(1.0f, (float)elapsed / BLOCK_ANIM_DURATION);
-
-  LedSegment seg = blockLeds[blockId];
-  int ledsToFade = seg.count - (int)(seg.count * progress);  // Fade from top to bottom
-
-  // Extract RGB components
-  uint8_t r = (targetColor >> 16) & 0xFF;
-  uint8_t g = (targetColor >> 8) & 0xFF;
-  uint8_t b = targetColor & 0xFF;
-
-  // Reverse brightness (fade out)
-  float brightness = 1.0f - ((sin((progress - 0.5f) * PI) + 1.0f) / 2.0f);
-
-  for (int i = 0; i < seg.count && seg.start + i < NUM_LEDS; i++) {
-    int ledIdx = seg.start + i;
-
-    if (i < ledsToFade) {
-      // Fading LEDs
-      uint8_t fade = (uint8_t)(brightness * 255);
-      strip.setPixelColor(ledIdx, strip.Color(r * fade / 255, g * fade / 255, b * fade / 255));
-    }
-    // LEDs below the fade line return to background effect
-  }
-
-  // After animation completes, switch to STOP state
-  if (progress >= 1.0f) {
-    blockStates[blockId] = STATE_STOP;
-    blockAnimStartTime[blockId] = 0;
+  for (int i = seg.start; i < seg.start + seg.count && i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, color);
   }
 }
