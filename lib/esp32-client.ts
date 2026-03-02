@@ -230,7 +230,13 @@ export class ESP32Client {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(`${this.baseUrl}${url}`, {
+      // Use Next.js proxy in browser: /esp32-api/* → ESP32 /api/*
+      const isBrowser = typeof window !== 'undefined';
+      const finalUrl = isBrowser
+        ? `${this.baseUrl}/esp32-api${url.replace('/api', '')}/`  // /api/status → /esp32-api/status/ (trailing slash for Next.js)
+        : `${this.baseUrl}${url}`;  // Direct connection
+
+      const response = await fetch(finalUrl, {
         ...options,
         signal: controller.signal,
       });
@@ -361,16 +367,30 @@ export async function discoverESP32(subnet: string = "192.168.110", port: number
  * Использует переменные окружения из .env.local если доступны
  */
 export function createLocalESP32Client(): ESP32Client {
-  // Проверяем переменные окружения (Next.js)
+  // Use Next.js proxy to avoid CORS issues in browser
+  // Browser: /esp32-api/status → Next.js proxy → http://192.168.4.1/api/status
+  const isBrowser = typeof window !== 'undefined';
+
+  if (isBrowser) {
+    console.log(`[ESP32Client] Creating browser client (using Next.js proxy at /esp32-api)`);
+    // Use relative URL to leverage Next.js rewrite proxy
+    return new ESP32Client({
+      host: window.location.hostname, // localhost or server IP
+      port: parseInt(window.location.port) || 3000,
+      timeout: 5000,
+    });
+  }
+
+  // Server-side or Electron: direct connection to ESP32
   const host = typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_ESP32_HOST
     ? process.env.NEXT_PUBLIC_ESP32_HOST
-    : "192.168.4.1"; // Default WiFi AP address
+    : "192.168.4.1";
 
   const port = typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_ESP32_PORT
     ? parseInt(process.env.NEXT_PUBLIC_ESP32_PORT)
     : 80;
 
-  console.log(`[ESP32Client] Creating client for ${host}:${port}`);
+  console.log(`[ESP32Client] Creating server client for ${host}:${port}`);
 
   return new ESP32Client({
     host,
