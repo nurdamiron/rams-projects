@@ -55,11 +55,11 @@
 #define NUM_STRIPS  10
 #define MAX_LEDS    150
 
-// GPIO пины для LED лент
+// GPIO пины для LED лент (ФИНАЛЬНЫЙ маппинг из тестовой версии)
 //  idx:   0    1    2    3    4    5    6    7    8    9
-// pin:   21   22   23   15   13   27   32   33    5    2
+// pin:   32   22   18   21   13   27    4   14    5    2
 // desc:  R1   R2   R3   R4   R5   R6   R7   R8  Inner Outer
-static const uint8_t  PIN_GPIO[NUM_STRIPS] = { 21, 22, 23, 15, 13, 27, 32, 33,  5,  2 };
+static const uint8_t  PIN_GPIO[NUM_STRIPS] = { 32, 22, 18, 21, 13, 27,  4, 14,  5,  2 };
 static const uint16_t PIN_LEDS[NUM_STRIPS] = { 33, 33, 33, 33, 33, 33, 33, 33, 64, 150 };
 
 static CRGB leds[NUM_STRIPS][MAX_LEDS];
@@ -184,17 +184,17 @@ void setup() {
   // Serial.println("[POWER] GPIO19 = Main Power (OFF)");
   // Serial.println("[POWER] GPIO4  = Power Button (INPUT)");
 
-  // LED инициализация (из svetdiod-project)
-  FastLED.addLeds<WS2812B, 21, GRB>(leds[0], PIN_LEDS[0]);  // Ray 1
-  FastLED.addLeds<WS2812B, 22, GRB>(leds[1], PIN_LEDS[1]);  // Ray 2
-  FastLED.addLeds<WS2812B, 23, GRB>(leds[2], PIN_LEDS[2]);  // Ray 3
-  FastLED.addLeds<WS2812B, 15, GRB>(leds[3], PIN_LEDS[3]);  // Ray 4
-  FastLED.addLeds<WS2812B, 13, GRB>(leds[4], PIN_LEDS[4]);  // Ray 5
-  FastLED.addLeds<WS2812B, 27, GRB>(leds[5], PIN_LEDS[5]);  // Ray 6
-  FastLED.addLeds<WS2812B, 32, GRB>(leds[6], PIN_LEDS[6]);  // Ray 7
-  FastLED.addLeds<WS2812B, 33, GRB>(leds[7], PIN_LEDS[7]);  // Ray 8
-  FastLED.addLeds<WS2812B,  5, GRB>(leds[8], PIN_LEDS[8]);  // Inner circle
-  FastLED.addLeds<WS2812B,  2, GRB>(leds[9], PIN_LEDS[9]);  // Outer circle
+  // LED инициализация (ФИНАЛЬНЫЙ маппинг из тестовой версии)
+  FastLED.addLeds<WS2812B, 32, GRB>(leds[0], PIN_LEDS[0]);  // Ray 1 (GPIO 32)
+  FastLED.addLeds<WS2812B, 22, GRB>(leds[1], PIN_LEDS[1]);  // Ray 2 (GPIO 22)
+  FastLED.addLeds<WS2812B, 18, GRB>(leds[2], PIN_LEDS[2]);  // Ray 3 (GPIO 18)
+  FastLED.addLeds<WS2812B, 21, GRB>(leds[3], PIN_LEDS[3]);  // Ray 4 (GPIO 21)
+  FastLED.addLeds<WS2812B, 13, GRB>(leds[4], PIN_LEDS[4]);  // Ray 5 (GPIO 13)
+  FastLED.addLeds<WS2812B, 27, GRB>(leds[5], PIN_LEDS[5]);  // Ray 6 (GPIO 27)
+  FastLED.addLeds<WS2812B,  4, GRB>(leds[6], PIN_LEDS[6]);  // Ray 7 (GPIO  4, перепаян с GPIO23)
+  FastLED.addLeds<WS2812B, 14, GRB>(leds[7], PIN_LEDS[7]);  // Ray 8 (GPIO 14)
+  FastLED.addLeds<WS2812B,  5, GRB>(leds[8], PIN_LEDS[8]);  // Inner circle (GPIO 5)
+  FastLED.addLeds<WS2812B,  2, GRB>(leds[9], PIN_LEDS[9]);  // Outer circle (GPIO 2)
 
   FastLED.setBrightness(gBri);
   FastLED.clear(true);

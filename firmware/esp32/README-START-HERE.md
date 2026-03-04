@@ -279,7 +279,7 @@ firmware/esp32/
 
 - **FastLED Wiki**: https://github.com/FastLED/FastLED/wiki
 - **ESP32 Docs**: https://docs.espressif.com/
-- **WS2812B Guide**: https://learn.adafruit.com/adafruit-neopixel-uberguide
+- **WS2812B Datasheet**: https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf
 
 ---
 
