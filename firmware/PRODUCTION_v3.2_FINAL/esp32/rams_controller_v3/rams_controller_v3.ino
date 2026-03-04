@@ -93,10 +93,10 @@ static const uint16_t INNER_START[8] = { 16,     8,      0,     56,     47,     
 static const uint16_t INNER_COUNT[8] = {  8,     8,      8,      9,      9,      7,      7,      9 };
 
 // Маппинг внешнего круга (150 LED на 8 долей, блок 8 БЕЗ внешнего круга!)
-// ИСПРАВЛЕНО: Реальный порядок блоков против часовой стрелки
+// ОРИГИНАЛЬНЫЙ маппинг (работал для блока 1)
 //                                     доля0    доля1   доля2   доля3   доля4   доля5   доля6   доля7
-static const uint16_t OUTER_START[8]   = { 128,     0,     18,     38,     62,     84,    106,      0 };
-static const uint16_t OUTER_COUNT[8]   = {  22,    18,     20,     24,     22,     22,     22,      0 };
+static const uint16_t OUTER_START[8]   = { 128,   106,     84,     62,     38,     18,      0,      0 };
+static const uint16_t OUTER_COUNT[8]   = {  22,    22,     22,     22,     24,     20,     18,      0 };
 
 // ============================================================================
 // POWER CONTROL КОНФИГУРАЦИЯ (ВРЕМЕННО ОТКЛЮЧЕНО)
@@ -434,13 +434,26 @@ void setup() {
 
     // ===== LED УПРАВЛЕНИЕ =====
     if (action == "UP") {
-      // ВАЖНО: Отменить fade OUT для всех блоков которые пересекаются с этим
-      // Это нужно чтобы при быстром переключении блоков fade OUT от предыдущего
-      // блока не затемнял LED нового блока
+      // ВАЖНО: Отменить fade OUT ТОЛЬКО для блоков которые пересекаются по кругам
+      // Проверяем пересечение по сектору (соседние блоки используют один круг)
+      int currentSector = (blockNum - 1) / 2;
+
       for (int i = 1; i <= TOTAL_BLOCKS; i++) {
         if (i != blockNum && fadeOutStates[i].isActive) {
-          fadeOutStates[i].isActive = false;
-          Serial.printf("[LED] Block %d fade OUT cancelled (conflict with block %d)\n", i, blockNum);
+          int otherSector = (i - 1) / 2;
+
+          // Пересечение если:
+          // 1. Одинаковый сектор (блоки 1-2, 3-4, 5-6 и т.д.)
+          // 2. Соседние сектора (круги могут пересекаться)
+          bool sameOrAdjacentSector = (currentSector == otherSector) ||
+                                      (abs(currentSector - otherSector) == 1) ||
+                                      (currentSector == 0 && otherSector == 7) ||
+                                      (currentSector == 7 && otherSector == 0);
+
+          if (sameOrAdjacentSector) {
+            fadeOutStates[i].isActive = false;
+            Serial.printf("[LED] Block %d fade OUT cancelled (circle overlap with block %d)\n", i, blockNum);
+          }
         }
       }
 
@@ -1234,17 +1247,35 @@ void loop() {
   if (now - lastEffectFrame >= (1000 / FPS)) {
     lastEffectFrame = now;
 
-    // Сначала применяем эффект (или static) ко ВСЕМ включенным LED
+    // Проверить есть ли активные блоки
+    bool anyBlockActive = false;
+    for (int i = 1; i <= TOTAL_BLOCKS; i++) {
+      if (ledStates[i]) {
+        anyBlockActive = true;
+        break;
+      }
+    }
+
+    // Сначала применяем эффект (или static) ко ВСЕМ LED
     if (gFx == 0) {
       // Статический цвет
       CRGB c(gR, gG, gB);
       for (int s = 0; s < NUM_STRIPS; s++) {
         for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
-          leds[s][j] = mask[s][j] ? c : CRGB::Black;
+          // Если есть активные блоки - используем маску
+          // Если нет активных блоков - показываем на ВСЕХ LED (эффект ALWAYS-ON)
+          leds[s][j] = (anyBlockActive ? mask[s][j] : true) ? c : CRGB::Black;
         }
       }
     } else {
       // Анимированный эффект (Rainbow, Fire, Wave, etc)
+      // Если нет активных блоков - временно включаем ВСЕ LED для эффекта
+      bool tempMask[NUM_STRIPS][MAX_LEDS];
+      if (!anyBlockActive) {
+        memcpy(tempMask, mask, sizeof(mask)); // Сохраняем текущую маску
+        memset(mask, 1, sizeof(mask)); // Включаем ВСЕ LED
+      }
+
       switch (gFx) {
         case 1: fxPulse();   break;
         case 2: fxRainbow(); break;
@@ -1253,6 +1284,10 @@ void loop() {
         case 5: fxWave();    break;
         case 6: fxFire();    break;
         case 7: fxMeteor();  break;
+      }
+
+      if (!anyBlockActive) {
+        memcpy(mask, tempMask, sizeof(mask)); // Восстанавливаем маску
       }
     }
 
