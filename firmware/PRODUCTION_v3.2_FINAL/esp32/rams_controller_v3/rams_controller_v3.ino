@@ -1,10 +1,11 @@
 /**
- * RAMS Controller v3.2 - PRODUCTION (DroneControl Style)
+ * RAMS Controller v3.3 - PRODUCTION (Fixed LED Mapping + OTA)
  *
  * Управляет 15 актуаторными блоками + LED зонами
  * - ESP32 → Serial1 (GPIO25/26) → Mega #1 (блоки 1-8)
  * - ESP32 → Serial2 (GPIO16/17) → Mega #2 (блоки 9-15)
  * - ESP32 → GPIO pins → WS2812B LEDs (10 strips)
+ * - OTA Updates → Port 3232 (Password: rams2026)
  *
  * LED конфигурация (из svetdiod-project/main.cpp):
  * - 8 лучей: GPIO 21,22,23,15,13,27,32,33 (по 33 LED)
@@ -13,14 +14,28 @@
  *
  * Логика: Блок 1 UP → Актуаторы 1 UP + LED зона 1 ON
  *
- * @version 3.2 (Production)
- * @date 2026-02-15
+ * ИЗМЕНЕНИЯ v3.3 (2026-03-04):
+ * ✅ Исправлен маппинг блоков на LED координаты
+ * ✅ Устранено дублирование кода в fade анимациях
+ * ✅ Добавлено кэширование координат блоков (оптимизация)
+ * ✅ Создана функция applyFadeBrightnessToBlock() для fade IN/OUT
+ * ✅ Добавлена поддержка OTA обновлений (ArduinoOTA)
+ *
+ * OTA ОБНОВЛЕНИЕ:
+ * - Hostname: RAMS-ESP32
+ * - Password: rams2026
+ * - Port: 3232 (default)
+ * - Arduino IDE: Tools → Port → Network Ports → RAMS-ESP32
+ *
+ * @version 3.3 (Production - Fixed + OTA)
+ * @date 2026-03-04
  * @author RAMS Global Team
  */
 
 #include <WiFi.h>
 #include <WebServer.h>
 #include <FastLED.h>
+#include <ArduinoOTA.h>
 #include "ACTUATOR_CONFIG.h"
 
 // ============================================================================
@@ -49,6 +64,7 @@ static const uint16_t PIN_LEDS[NUM_STRIPS] = { 33, 33, 33, 33, 33, 33, 33, 33, 6
 
 static CRGB leds[NUM_STRIPS][MAX_LEDS];
 static uint8_t heat[NUM_STRIPS][MAX_LEDS];  // Для эффекта Fire
+static bool mask[NUM_STRIPS][MAX_LEDS];     // Маска активных LED (из svetdiod-project)
 
 // Глобальные LED параметры
 uint8_t gR = 0, gG = 150, gB = 255;  // Cyan
@@ -115,14 +131,23 @@ int activeBlocksCount = 0;
 // LED включается при UP и остается ВКЛ пока не придет STOP или DOWN
 bool ledStates[TOTAL_BLOCKS + 1];  // true = LED ВКЛ, false = LED ВЫКЛ
 
-// Fade состояния для плавного угасания LED при опускании
-struct FadeState {
+// Fade IN состояния для плавного ВКЛЮЧЕНИЯ LED при поднятии
+struct FadeInState {
   bool isActive;
   unsigned long startTime;
   int duration;
 };
 
-FadeState fadeStates[TOTAL_BLOCKS + 1];  // 0 не используется
+FadeInState fadeInStates[TOTAL_BLOCKS + 1];  // 0 не используется
+
+// Fade OUT состояния для плавного угасания LED при опускании
+struct FadeOutState {
+  bool isActive;
+  unsigned long startTime;
+  int duration;
+};
+
+FadeOutState fadeOutStates[TOTAL_BLOCKS + 1];  // 0 не используется
 
 // Heartbeat
 bool mega1Alive = false;
@@ -146,9 +171,9 @@ void setup() {
   delay(100);
 
   Serial.println("\n========================================");
-  Serial.println("  RAMS CONTROLLER v3.2 PRODUCTION");
-  Serial.println("  Actuators + LED Zones + Power Control");
-  Serial.println("  DroneControl Style");
+  Serial.println("  RAMS CONTROLLER v3.3 PRODUCTION");
+  Serial.println("  Actuators + LED Zones + OTA Updates");
+  Serial.println("  Fixed LED Mapping + Optimizations");
   Serial.println("========================================");
 
   // Power Control инициализация (ВРЕМЕННО ОТКЛЮЧЕНО)
@@ -176,16 +201,26 @@ void setup() {
   Serial.println("[LED] 10 strips initialized");
   Serial.println("[LED] Rays: 8x33 LED | Inner: 64 LED | Outer: 150 LED");
 
-  // Инициализация состояний блоков
+  // Инициализация LED координат блоков (ВАЖНО: ПЕРЕД использованием!)
+  initBlockLEDCoords();
+  Serial.println("[LED] Block coordinates initialized");
+
+  // Инициализация состояний блоков и маски
   for (int i = 0; i <= TOTAL_BLOCKS; i++) {
     blockStates[i].isActive = false;
     blockStates[i].startTime = 0;
     blockStates[i].duration = 0;
     ledStates[i] = false;  // LED выключены
-    fadeStates[i].isActive = false;  // Fade выключен
-    fadeStates[i].startTime = 0;
-    fadeStates[i].duration = 0;
+    fadeInStates[i].isActive = false;
+    fadeInStates[i].startTime = 0;
+    fadeInStates[i].duration = 0;
+    fadeOutStates[i].isActive = false;
+    fadeOutStates[i].startTime = 0;
+    fadeOutStates[i].duration = 0;
   }
+
+  // Инициализация маски (все LED выключены)
+  memset(mask, 0, sizeof(mask));
 
   // Mega Serial
   Mega1Serial.begin(SERIAL_BAUD, SERIAL_8N1, MEGA1_RX, MEGA1_TX);
@@ -429,10 +464,13 @@ void setup() {
     for (int i = 1; i <= TOTAL_BLOCKS; i++) {
       blockStates[i].isActive = false;
       ledStates[i] = false;  // ❌ Выключить все LED
-      fadeStates[i].isActive = false;  // ❌ Отменить fade анимации
+      fadeInStates[i].isActive = false;   // ❌ Отменить fade IN
+      fadeOutStates[i].isActive = false;  // ❌ Отменить fade OUT
     }
     activeBlocksCount = 0;
 
+    // Очистить маску и LED
+    memset(mask, 0, sizeof(mask));
     FastLED.clear(true);
 
     server.send(200, "text/plain", "OK");
@@ -602,6 +640,55 @@ void setup() {
   server.begin();
   Serial.println("[SERVER] Started on port 80");
 
+  // ===== OTA UPDATE SETUP =====
+  ArduinoOTA.setHostname("RAMS-ESP32");
+  ArduinoOTA.setPassword("rams2026");  // Пароль для OTA обновления
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else {  // U_SPIFFS
+      type = "filesystem";
+    }
+    Serial.println("[OTA] Update Start: " + type);
+
+    // Остановить все актуаторы перед обновлением
+    Mega1Serial.println("ALL:STOP");
+    Mega2Serial.println("ALL:STOP");
+
+    // Выключить LED
+    FastLED.clear(true);
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] Update Complete!");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+
+  ArduinoOTA.begin();
+  Serial.println("[OTA] Ready for updates");
+  Serial.print("[OTA] Hostname: RAMS-ESP32");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print(" | IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.print(" | AP IP: ");
+    Serial.println(WiFi.softAPIP());
+  }
+
   Serial.println("[READY] System initialized!\n");
 }
 
@@ -610,12 +697,154 @@ void setup() {
 // ============================================================================
 
 /**
+ * Структура для хранения координат LED блока
+ * Используется для кэширования и избежания дублирования кода
+ */
+struct BlockLEDCoords {
+  uint8_t leftRay;      // Левый луч (0-7)
+  uint8_t rightRay;     // Правый луч (0-7)
+  int sector;           // Сектор (0-7)
+  bool isOuter;         // true = внешний блок, false = внутренний
+  bool isSpecial;       // true = блок 15 (особый случай)
+};
+
+/**
+ * Кэш координат для всех блоков (вычисляется 1 раз в setup)
+ */
+static BlockLEDCoords blockCoords[TOTAL_BLOCKS + 1];
+
+/**
+ * Инициализация координат блоков
+ * ВАЖНО: Вызывать в setup() ОДИН РАЗ!
+ */
+void initBlockLEDCoords() {
+  for (int blockNum = 1; blockNum <= TOTAL_BLOCKS; blockNum++) {
+    int sector = (blockNum - 1) / 2;
+    blockCoords[blockNum].sector = sector;
+    blockCoords[blockNum].leftRay = RAY[sector];
+    blockCoords[blockNum].rightRay = RAY[(sector + 1) % 8];
+    blockCoords[blockNum].isOuter = (blockNum % 2 == 1);
+    blockCoords[blockNum].isSpecial = (blockNum == 15);
+  }
+}
+
+/**
+ * Обновить маску для конкретного блока
+ */
+void updateMaskForBlock(int blockNum, bool enable) {
+  if (blockNum < 1 || blockNum > TOTAL_BLOCKS) return;
+
+  const BlockLEDCoords& coords = blockCoords[blockNum];
+  uint8_t L = coords.leftRay;
+  uint8_t R = coords.rightRay;
+  int sector = coords.sector;
+
+  if (coords.isSpecial) {
+    // Блок 15: полные лучи + внутренний круг, БЕЗ внешнего круга!
+    for (int j = 0; j < 33; j++) {
+      mask[L][j] = enable;
+      mask[R][j] = enable;
+    }
+    for (int j = 0; j < INNER_COUNT[sector]; j++) {
+      mask[S_INNER][INNER_START[sector] + j] = enable;
+    }
+  }
+  else if (coords.isOuter) {
+    // ВНЕШНИЕ блоки (1,3,5,7,9,11,13): внешняя часть лучей + внешний круг
+    for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
+      mask[L][j] = enable;
+      mask[R][j] = enable;
+    }
+    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
+      mask[S_OUTER][OUTER_START[sector] + j] = enable;
+    }
+  }
+  else {
+    // ВНУТРЕННИЕ блоки (2,4,6,8,10,12,14): внутренняя часть лучей + оба круга
+    for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
+      mask[L][j] = enable;
+      mask[R][j] = enable;
+    }
+    for (int j = 0; j < INNER_COUNT[sector]; j++) {
+      mask[S_INNER][INNER_START[sector] + j] = enable;
+    }
+    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
+      mask[S_OUTER][OUTER_START[sector] + j] = enable;
+    }
+  }
+}
+
+/**
+ * Применить fade яркость к LED блока (используется в fade IN/OUT)
+ * @param blockNum Номер блока (1-15)
+ * @param fadeBrightness Яркость fade (0-255)
+ */
+void applyFadeBrightnessToBlock(int blockNum, uint8_t fadeBrightness) {
+  if (blockNum < 1 || blockNum > TOTAL_BLOCKS) return;
+
+  const BlockLEDCoords& coords = blockCoords[blockNum];
+  uint8_t L = coords.leftRay;
+  uint8_t R = coords.rightRay;
+  int sector = coords.sector;
+
+  if (coords.isSpecial) {
+    // Блок 15: полные лучи + внутренний круг
+    for (int j = 0; j < 33; j++) {
+      leds[L][j].nscale8(fadeBrightness);
+      leds[R][j].nscale8(fadeBrightness);
+    }
+    for (int j = 0; j < INNER_COUNT[sector]; j++) {
+      leds[S_INNER][INNER_START[sector] + j].nscale8(fadeBrightness);
+    }
+  }
+  else if (coords.isOuter) {
+    // ВНЕШНИЕ блоки: внешняя часть лучей + внешний круг
+    for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
+      leds[L][j].nscale8(fadeBrightness);
+      leds[R][j].nscale8(fadeBrightness);
+    }
+    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
+      leds[S_OUTER][OUTER_START[sector] + j].nscale8(fadeBrightness);
+    }
+  }
+  else {
+    // ВНУТРЕННИЕ блоки: внутренняя часть лучей + оба круга
+    for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
+      leds[L][j].nscale8(fadeBrightness);
+      leds[R][j].nscale8(fadeBrightness);
+    }
+    for (int j = 0; j < INNER_COUNT[sector]; j++) {
+      leds[S_INNER][INNER_START[sector] + j].nscale8(fadeBrightness);
+    }
+    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
+      leds[S_OUTER][OUTER_START[sector] + j].nscale8(fadeBrightness);
+    }
+  }
+}
+
+/**
+ * Применить маску - выключить неактивные LED
+ */
+void applyMask() {
+  for (int s = 0; s < NUM_STRIPS; s++) {
+    for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
+      if (!mask[s][j]) leds[s][j] = CRGB::Black;
+    }
+  }
+}
+
+/**
  * Включить LED зону для блока
  *
  * Логика маппинга:
- * - ВНЕШНИЕ блоки (1,3,5,7,9,11,13,15): внешняя часть лучей + внешний круг
- * - ВНУТРЕННИЕ блоки (2,4,6,8,10,12,14): внутренняя часть лучей + внутренний круг
+ * - ВНЕШНИЕ блоки (1,3,5,7,9,11,13): внешняя часть лучей + внешний круг
+ * - ВНУТРЕННИЕ блоки (2,4,6,8,10,12,14): внутренняя часть лучей + оба круга
  * - Блок 15 (особый): ПОЛНЫЕ лучи + внутренний круг, БЕЗ внешнего круга
+ *
+ * Примеры:
+ * - Блок 1 (outer): лучи 0-1 [18-32] + внешний круг [128-149]
+ * - Блок 2 (inner): лучи 0-1 [0-17] + внутренний круг [16-23] + внешний круг [128-149]
+ * - Блок 15 (special): лучи 7-0 [0-32] + внутренний круг [24-32], БЕЗ внешнего
  */
 void lightUpBlock(int blockNum) {
   if (blockNum < 1 || blockNum > TOTAL_BLOCKS) {
@@ -623,59 +852,18 @@ void lightUpBlock(int blockNum) {
     return;
   }
 
-  // Определяем долю пиццы (0-7) на основе блока
-  // Блоки 1-2 → доля 0
-  // Блоки 3-4 → доля 1
-  // ...
-  // Блоки 15 → доля 7
-  int sector = (blockNum - 1) / 2;  // 0-7
-  bool isOuter = (blockNum % 2 == 1);  // Нечетные = внешние
+  // Обновить маску для этого блока
+  updateMaskForBlock(blockNum, true);
 
-  uint8_t L = RAY[sector];              // Левый луч
-  uint8_t R = RAY[(sector + 1) % 8];    // Правый луч
+  // Запустить FADE IN анимацию (1 секунда = плавное появление)
+  fadeInStates[blockNum].isActive = true;
+  fadeInStates[blockNum].startTime = millis();
+  fadeInStates[blockNum].duration = 1000;  // 1 секунда
 
-  CRGB color = CRGB(gR, gG, gB);
-
-  if (blockNum == 15) {
-    // Блок 15 (особый): ПОЛНЫЕ лучи + внутренний круг, БЕЗ внешнего круга
-    for (int j = 0; j < 33; j++) {
-      leds[L][j] = color;
-      leds[R][j] = color;
-    }
-    for (int j = 0; j < INNER_COUNT[sector]; j++) {
-      leds[S_INNER][INNER_START[sector] + j] = color;
-    }
-    Serial.printf("[LED] Block 15 ON (sector %d, FULL rays + inner)\n", sector);
-  }
-  else if (isOuter) {
-    // ВНЕШНИЕ блоки (1,3,5,7,9,11,13): внешняя часть лучей + внешний круг
-    for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
-      leds[L][j] = color;
-      leds[R][j] = color;
-    }
-    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-      leds[S_OUTER][OUTER_START[sector] + j] = color;
-    }
-    Serial.printf("[LED] Block %d OUTER ON (sector %d, rays %d-%d)\n", blockNum, sector, L, R);
-  }
-  else {
-    // ВНУТРЕННИЕ блоки (2,4,6,8,10,12,14): внутренняя часть лучей + оба круга
-    for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
-      leds[L][j] = color;
-      leds[R][j] = color;
-    }
-    // Маленький круг (внутренний)
-    for (int j = 0; j < INNER_COUNT[sector]; j++) {
-      leds[S_INNER][INNER_START[sector] + j] = color;
-    }
-    // Большой круг (внешний отрезок) - ДОБАВЛЕНО!
-    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-      leds[S_OUTER][OUTER_START[sector] + j] = color;
-    }
-    Serial.printf("[LED] Block %d INNER ON (sector %d, rays %d-%d + both circles)\n", blockNum, sector, L, R);
-  }
-
-  FastLED.show();
+  const BlockLEDCoords& coords = blockCoords[blockNum];
+  Serial.printf("[LED] Block %d FADE IN started (sector %d, rays %d-%d, %s)\n",
+    blockNum, coords.sector, coords.leftRay, coords.rightRay,
+    coords.isSpecial ? "SPECIAL" : (coords.isOuter ? "OUTER" : "INNER"));
 }
 
 /**
@@ -686,66 +874,30 @@ void fadeBlock(int blockNum) {
     return;
   }
 
-  // Запустить fade анимацию с тем же duration что у актуатора
-  fadeStates[blockNum].isActive = true;
-  fadeStates[blockNum].startTime = millis();
-  fadeStates[blockNum].duration = blockStates[blockNum].duration;
+  // Запустить FADE OUT анимацию с тем же duration что у актуатора
+  fadeOutStates[blockNum].isActive = true;
+  fadeOutStates[blockNum].startTime = millis();
+  fadeOutStates[blockNum].duration = blockStates[blockNum].duration;
 
-  Serial.printf("[LED] Block %d FADE started (%dms)\n", blockNum, fadeStates[blockNum].duration);
+  Serial.printf("[LED] Block %d FADE OUT started (%dms)\n", blockNum, fadeOutStates[blockNum].duration);
 }
 
 /**
- * Выключить LED зону для блока
+ * Выключить LED зону для блока (МГНОВЕННО, без fade)
  */
 void turnOffBlock(int blockNum) {
   if (blockNum < 1 || blockNum > TOTAL_BLOCKS) {
     return;
   }
 
-  int sector = (blockNum - 1) / 2;  // 0-7
-  bool isOuter = (blockNum % 2 == 1);  // Нечетные = внешние
+  // Обновить маску - выключить этот блок
+  updateMaskForBlock(blockNum, false);
 
-  uint8_t L = RAY[sector];
-  uint8_t R = RAY[(sector + 1) % 8];
-
-  if (blockNum == 15) {
-    // Блок 15: выключить полные лучи + внутренний круг
-    for (int j = 0; j < 33; j++) {
-      leds[L][j] = CRGB::Black;
-      leds[R][j] = CRGB::Black;
-    }
-    for (int j = 0; j < INNER_COUNT[sector]; j++) {
-      leds[S_INNER][INNER_START[sector] + j] = CRGB::Black;
-    }
-  }
-  else if (isOuter) {
-    // ВНЕШНИЕ блоки: выключить внешнюю часть лучей + внешний круг
-    for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
-      leds[L][j] = CRGB::Black;
-      leds[R][j] = CRGB::Black;
-    }
-    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-      leds[S_OUTER][OUTER_START[sector] + j] = CRGB::Black;
-    }
-  }
-  else {
-    // ВНУТРЕННИЕ блоки: выключить внутреннюю часть лучей + оба круга
-    for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
-      leds[L][j] = CRGB::Black;
-      leds[R][j] = CRGB::Black;
-    }
-    // Маленький круг (внутренний)
-    for (int j = 0; j < INNER_COUNT[sector]; j++) {
-      leds[S_INNER][INNER_START[sector] + j] = CRGB::Black;
-    }
-    // Большой круг (внешний отрезок) - ДОБАВЛЕНО!
-    for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-      leds[S_OUTER][OUTER_START[sector] + j] = CRGB::Black;
-    }
-  }
-
+  // Применить маску - это очистит LED этого блока
+  applyMask();
   FastLED.show();
-  Serial.printf("[LED] Block %d OFF\n", blockNum);
+
+  Serial.printf("[LED] Block %d OFF (instant)\n", blockNum);
 }
 
 // ============================================================================
@@ -759,45 +911,10 @@ void fxPulse() {
   CRGB c(gR, gG, gB);
   c.nscale8(beatsin8(map(gSpd, 0, 255, 8, 60), 15, 255));
 
-  // Применить к активным блокам (проверяем LED состояние, не актуатор!)
-  for (int i = 1; i <= TOTAL_BLOCKS; i++) {
-    if (!ledStates[i]) continue;  // ✅ Проверяем LED состояние
-    if (fadeStates[i].isActive) continue;  // ✅ Пропускаем блоки в fade!
-
-    int sector = (i - 1) / 2;
-    bool isOuter = (i % 2 == 1);
-    uint8_t L = RAY[sector];
-    uint8_t R = RAY[(sector + 1) % 8];
-
-    if (i == 15) {
-      for (int j = 0; j < 33; j++) {
-        leds[L][j] = c;
-        leds[R][j] = c;
-      }
-      for (int j = 0; j < INNER_COUNT[sector]; j++) {
-        leds[S_INNER][INNER_START[sector] + j] = c;
-      }
-    }
-    else if (isOuter) {
-      for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
-        leds[L][j] = c;
-        leds[R][j] = c;
-      }
-      for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-        leds[S_OUTER][OUTER_START[sector] + j] = c;
-      }
-    }
-    else {
-      for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
-        leds[L][j] = c;
-        leds[R][j] = c;
-      }
-      for (int j = 0; j < INNER_COUNT[sector]; j++) {
-        leds[S_INNER][INNER_START[sector] + j] = c;
-      }
-      for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-        leds[S_OUTER][OUTER_START[sector] + j] = c;
-      }
+  // Применить ко ВСЕМ лентам
+  for (int s = 0; s < NUM_STRIPS; s++) {
+    for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
+      leds[s][j] = mask[s][j] ? c : CRGB::Black;
     }
   }
 }
@@ -809,31 +926,10 @@ void fxRainbow() {
   static uint8_t hue = 0;
   hue += map(gSpd, 0, 255, 1, 5);
 
+  // Генерировать радугу на ВСЕХ лентах
   for (int s = 0; s < NUM_STRIPS; s++) {
     for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
-      leds[s][j] = CHSV(hue + j * 3 + s * 25, 255, 255);
-    }
-  }
-
-  // Применить маску активных блоков (проверяем LED состояние!)
-  for (int s = 0; s < NUM_STRIPS; s++) {
-    for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
-      bool inActiveBlock = false;
-      for (int i = 1; i <= TOTAL_BLOCKS; i++) {
-        if (!ledStates[i]) continue;  // ✅ Проверяем LED состояние
-        if (fadeStates[i].isActive) continue;  // ✅ Пропускаем блоки в fade!
-
-        int sector = (i - 1) / 2;
-        bool isOuter = (i % 2 == 1);
-        uint8_t L = RAY[sector];
-        uint8_t R = RAY[(sector + 1) % 8];
-
-        if (s == L || s == R || s == S_INNER || s == S_OUTER) {
-          inActiveBlock = true;
-          break;
-        }
-      }
-      if (!inActiveBlock) leds[s][j] = CRGB::Black;
+      leds[s][j] = mask[s][j] ? (CRGB)CHSV(hue + j * 3 + s * 25, 255, 255) : CRGB::Black;
     }
   }
 }
@@ -864,6 +960,7 @@ void fxChase() {
       leds[s][tp].nscale8(255 - t * 40);
     }
   }
+  applyMask();  // ✅ Применить маску!
 }
 
 /**
@@ -878,9 +975,10 @@ void fxSparkle() {
     }
     if (random8() < rate) {
       uint16_t p = random16() % PIN_LEDS[s];
-      leds[s][p] = CRGB(gR, gG, gB);
+      if (mask[s][p]) leds[s][p] = CRGB(gR, gG, gB);  // ✅ Проверка маски!
     }
   }
+  applyMask();  // ✅ Применить маску!
 }
 
 /**
@@ -892,6 +990,10 @@ void fxWave() {
 
   for (int s = 0; s < NUM_STRIPS; s++) {
     for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
+      if (!mask[s][j]) {  // ✅ Проверка маски!
+        leds[s][j] = CRGB::Black;
+        continue;
+      }
       leds[s][j].setRGB(gR, gG, gB);
       leds[s][j].nscale8(sin8((uint8_t)(j * 255 / PIN_LEDS[s]) + (phase >> 8) + s * 40));
     }
@@ -929,6 +1031,7 @@ void fxFire() {
       leds[s][j] = HeatColor(heat[s][j]);
     }
   }
+  applyMask();  // ✅ Применить маску!
 }
 
 /**
@@ -962,6 +1065,7 @@ void fxMeteor() {
       }
     }
   }
+  applyMask();  // ✅ Применить маску!
 }
 
 // ============================================================================
@@ -970,6 +1074,7 @@ void fxMeteor() {
 
 void loop() {
   server.handleClient();
+  ArduinoOTA.handle();  // Обработка OTA обновлений
 
   // ===== ЧТЕНИЕ ОТВЕТОВ ОТ MEGA =====
   if (Mega1Serial.available()) {
@@ -1058,82 +1163,56 @@ void loop() {
     lastHeartbeat = now;
   }
 
-  // ===== ПЛАВНОЕ УГАСАНИЕ LED ПРИ ОПУСКАНИИ =====
-  // Обрабатываем fade для каждого блока
+  // ===== FADE IN - ПЛАВНОЕ ПОЯВЛЕНИЕ LED ПРИ ПОДНЯТИИ =====
   for (int i = 1; i <= TOTAL_BLOCKS; i++) {
-    if (fadeStates[i].isActive) {
-      unsigned long elapsed = now - fadeStates[i].startTime;
+    if (fadeInStates[i].isActive) {
+      unsigned long elapsed = now - fadeInStates[i].startTime;
 
-      if (elapsed >= fadeStates[i].duration) {
-        // Fade завершен - выключаем LED полностью
-        fadeStates[i].isActive = false;
-        turnOffBlock(i);
-        Serial.printf("[LED] Block %d FADE completed\n", i);
-      } else {
-        // Продолжаем fade - плавно уменьшаем яркость
-        float progress = (float)elapsed / (float)fadeStates[i].duration;  // 0.0 - 1.0
-        uint8_t fadeBrightness = (uint8_t)(255 * (1.0 - progress));       // 255 → 0
-
-        // Создаем цвет с учетом fade
-        CRGB fadeColor = CRGB(gR, gG, gB);
-        fadeColor.nscale8(fadeBrightness);
-
-        // Получаем координаты блока
-        int sector = (i - 1) / 2;
-        bool isOuter = (i % 2 == 1);
-        uint8_t L = RAY[sector];
-        uint8_t R = RAY[(sector + 1) % 8];
-
-        // Применяем fade цвет к LED этого блока
-        if (i == 15) {
-          // Блок 15: полные лучи + внутренний круг
-          for (int j = 0; j < 33; j++) {
-            leds[L][j] = fadeColor;
-            leds[R][j] = fadeColor;
-          }
-          for (int j = 0; j < INNER_COUNT[sector]; j++) {
-            leds[S_INNER][INNER_START[sector] + j] = fadeColor;
-          }
-        }
-        else if (isOuter) {
-          // ВНЕШНИЕ блоки: внешняя часть лучей + внешний круг
-          for (int j = RAY_OUT_START; j < RAY_OUT_START + RAY_OUT_COUNT; j++) {
-            leds[L][j] = fadeColor;
-            leds[R][j] = fadeColor;
-          }
-          for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-            leds[S_OUTER][OUTER_START[sector] + j] = fadeColor;
-          }
-        }
-        else {
-          // ВНУТРЕННИЕ блоки: внутренняя часть лучей + оба круга
-          for (int j = RAY_IN_START; j < RAY_IN_START + RAY_IN_COUNT; j++) {
-            leds[L][j] = fadeColor;
-            leds[R][j] = fadeColor;
-          }
-          for (int j = 0; j < INNER_COUNT[sector]; j++) {
-            leds[S_INNER][INNER_START[sector] + j] = fadeColor;
-          }
-          for (int j = 0; j < OUTER_COUNT[sector]; j++) {
-            leds[S_OUTER][OUTER_START[sector] + j] = fadeColor;
-          }
-        }
-
-        FastLED.show();
+      if (elapsed >= fadeInStates[i].duration) {
+        // Fade IN завершен - LED полностью включены
+        fadeInStates[i].isActive = false;
+        Serial.printf("[LED] Block %d FADE IN completed\n", i);
       }
+      // Fade IN применяется автоматически через mask и эффект Static
+    }
+  }
+
+  // ===== FADE OUT - ПЛАВНОЕ УГАСАНИЕ LED ПРИ ОПУСКАНИИ =====
+  for (int i = 1; i <= TOTAL_BLOCKS; i++) {
+    if (fadeOutStates[i].isActive) {
+      unsigned long elapsed = now - fadeOutStates[i].startTime;
+
+      if (elapsed >= fadeOutStates[i].duration) {
+        // Fade OUT завершен - выключаем LED полностью
+        fadeOutStates[i].isActive = false;
+        updateMaskForBlock(i, false);  // Убрать из маски
+        applyMask();
+        FastLED.show();
+        Serial.printf("[LED] Block %d FADE OUT completed\n", i);
+      }
+      // Fade OUT продолжается - применяется ниже
     }
   }
 
   // ===== LED ЭФФЕКТЫ =====
+  // ВАЖНО: Эффекты работают ВСЕГДА на включенных LED (через mask)
+  // Fade IN/OUT только модулирует яркость при поднятии/опускании
   static uint32_t lastEffectFrame = 0;
 
-  if (gFx == 0) {
-    // Статика - ничего не делаем, LED обновляются в lightUpBlock()
-  } else {
-    // Анимированные эффекты - обновляем с FPS
-    if (now - lastEffectFrame >= (1000 / FPS)) {
-      lastEffectFrame = now;
+  if (now - lastEffectFrame >= (1000 / FPS)) {
+    lastEffectFrame = now;
 
+    // Сначала применяем эффект (или static) ко ВСЕМ включенным LED
+    if (gFx == 0) {
+      // Статический цвет
+      CRGB c(gR, gG, gB);
+      for (int s = 0; s < NUM_STRIPS; s++) {
+        for (uint16_t j = 0; j < PIN_LEDS[s]; j++) {
+          leds[s][j] = mask[s][j] ? c : CRGB::Black;
+        }
+      }
+    } else {
+      // Анимированный эффект (Rainbow, Fire, Wave, etc)
       switch (gFx) {
         case 1: fxPulse();   break;
         case 2: fxRainbow(); break;
@@ -1143,8 +1222,35 @@ void loop() {
         case 6: fxFire();    break;
         case 7: fxMeteor();  break;
       }
-
-      FastLED.show();
     }
+
+    // Теперь применяем FADE IN анимации (модулируем яркость 0→255)
+    for (int i = 1; i <= TOTAL_BLOCKS; i++) {
+      if (fadeInStates[i].isActive) {
+        unsigned long elapsed = now - fadeInStates[i].startTime;
+        float progress = (float)elapsed / (float)fadeInStates[i].duration;  // 0.0 - 1.0
+        if (progress > 1.0) progress = 1.0;
+        uint8_t fadeBrightness = (uint8_t)(255 * progress);  // 0 → 255
+
+        // ✅ Применяем fade яркость ПОВЕРХ эффекта
+        applyFadeBrightnessToBlock(i, fadeBrightness);
+      }
+    }
+
+    // Применяем FADE OUT анимации (модулируем яркость 255→0)
+    for (int i = 1; i <= TOTAL_BLOCKS; i++) {
+      if (fadeOutStates[i].isActive) {
+        unsigned long elapsed = now - fadeOutStates[i].startTime;
+        float progress = (float)elapsed / (float)fadeOutStates[i].duration;  // 0.0 - 1.0
+        if (progress > 1.0) progress = 1.0;
+        uint8_t fadeBrightness = (uint8_t)(255 * (1.0 - progress));  // 255 → 0
+
+        // ✅ Применяем fade яркость ПОВЕРХ эффекта
+        applyFadeBrightnessToBlock(i, fadeBrightness);
+      }
+    }
+
+    // Обновить LED ленты
+    FastLED.show();
   }
 }
