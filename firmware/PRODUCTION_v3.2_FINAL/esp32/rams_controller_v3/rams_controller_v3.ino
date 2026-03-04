@@ -93,9 +93,10 @@ static const uint16_t INNER_START[8] = { 16,     8,      0,     56,     47,     
 static const uint16_t INNER_COUNT[8] = {  8,     8,      8,      9,      9,      7,      7,      9 };
 
 // Маппинг внешнего круга (150 LED на 8 долей, блок 8 БЕЗ внешнего круга!)
-//                                     доля1    доля2   доля3   доля4   доля5   доля6   доля7   доля8
-static const uint16_t OUTER_START[8]   = { 128,   106,     84,     62,     38,     18,      0,      0 };
-static const uint16_t OUTER_COUNT[8]   = {  22,    22,     22,     22,     24,     20,     18,      0 };
+// ИСПРАВЛЕНО: Реальный порядок блоков против часовой стрелки
+//                                     доля0    доля1   доля2   доля3   доля4   доля5   доля6   доля7
+static const uint16_t OUTER_START[8]   = { 128,     0,     18,     38,     62,     84,    106,      0 };
+static const uint16_t OUTER_COUNT[8]   = {  22,    18,     20,     24,     22,     22,     22,      0 };
 
 // ============================================================================
 // POWER CONTROL КОНФИГУРАЦИЯ (ВРЕМЕННО ОТКЛЮЧЕНО)
@@ -433,6 +434,16 @@ void setup() {
 
     // ===== LED УПРАВЛЕНИЕ =====
     if (action == "UP") {
+      // ВАЖНО: Отменить fade OUT для всех блоков которые пересекаются с этим
+      // Это нужно чтобы при быстром переключении блоков fade OUT от предыдущего
+      // блока не затемнял LED нового блока
+      for (int i = 1; i <= TOTAL_BLOCKS; i++) {
+        if (i != blockNum && fadeOutStates[i].isActive) {
+          fadeOutStates[i].isActive = false;
+          Serial.printf("[LED] Block %d fade OUT cancelled (conflict with block %d)\n", i, blockNum);
+        }
+      }
+
       // Включить LED зону для этого блока
       ledStates[blockNum] = true;   // ✅ LED ВКЛ
       lightUpBlock(blockNum);
@@ -739,6 +750,13 @@ void updateMaskForBlock(int blockNum, bool enable) {
   uint8_t R = coords.rightRay;
   int sector = coords.sector;
 
+  // DEBUG: Показать что именно включается
+  if (enable) {
+    Serial.printf("[DEBUG] Block %d: sector=%d, rays=%d-%d, type=%s\n",
+      blockNum, sector, L, R,
+      coords.isSpecial ? "SPECIAL" : (coords.isOuter ? "OUTER" : "INNER"));
+  }
+
   if (coords.isSpecial) {
     // Блок 15: полные лучи + внутренний круг, БЕЗ внешнего круга!
     for (int j = 0; j < 33; j++) {
@@ -747,6 +765,10 @@ void updateMaskForBlock(int blockNum, bool enable) {
     }
     for (int j = 0; j < INNER_COUNT[sector]; j++) {
       mask[S_INNER][INNER_START[sector] + j] = enable;
+    }
+    if (enable) {
+      Serial.printf("[DEBUG]   Inner circle: LED %d-%d (%d LEDs)\n",
+        INNER_START[sector], INNER_START[sector] + INNER_COUNT[sector] - 1, INNER_COUNT[sector]);
     }
   }
   else if (coords.isOuter) {
@@ -757,6 +779,10 @@ void updateMaskForBlock(int blockNum, bool enable) {
     }
     for (int j = 0; j < OUTER_COUNT[sector]; j++) {
       mask[S_OUTER][OUTER_START[sector] + j] = enable;
+    }
+    if (enable) {
+      Serial.printf("[DEBUG]   Outer circle: LED %d-%d (%d LEDs)\n",
+        OUTER_START[sector], OUTER_START[sector] + OUTER_COUNT[sector] - 1, OUTER_COUNT[sector]);
     }
   }
   else {
@@ -770,6 +796,12 @@ void updateMaskForBlock(int blockNum, bool enable) {
     }
     for (int j = 0; j < OUTER_COUNT[sector]; j++) {
       mask[S_OUTER][OUTER_START[sector] + j] = enable;
+    }
+    if (enable) {
+      Serial.printf("[DEBUG]   Inner circle: LED %d-%d (%d LEDs)\n",
+        INNER_START[sector], INNER_START[sector] + INNER_COUNT[sector] - 1, INNER_COUNT[sector]);
+      Serial.printf("[DEBUG]   Outer circle: LED %d-%d (%d LEDs)\n",
+        OUTER_START[sector], OUTER_START[sector] + OUTER_COUNT[sector] - 1, OUTER_COUNT[sector]);
     }
   }
 }
