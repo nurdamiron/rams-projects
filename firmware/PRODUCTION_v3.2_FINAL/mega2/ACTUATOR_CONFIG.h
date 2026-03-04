@@ -40,7 +40,7 @@
 #define RELAY_OFF           HIGH  // HIGH = выключено
 
 // Длительность по умолчанию
-#define DEFAULT_DURATION_MS 5000  // 5 секунд
+#define DEFAULT_DURATION_MS 6000  // 6 секунд
 
 // Максимальное количество одновременно активных блоков
 #define MAX_ACTIVE_BLOCKS   2
@@ -117,8 +117,8 @@ struct BlockConfig {
  * - Блок 6 на Mega #1: пины 50-53 (физически запаян)
  * - Блок 7 на Mega #1: пины 42-45 (переназначен)
  * - Блок 8 на Mega #1: пины 46-49 (переназначен)
- * - Блок 14 на Mega #2: пины 50-53 (аналогично блоку 6)
- * - Блок 15 на Mega #2: пины 42-47 (3 АКТУАТОРА!)
+ * - Блок 14 на Mega #2: пины 42-45 (2 актуатора)
+ * - Блок 15 на Mega #2: пины 46-51 (3 АКТУАТОРА, 52-53 не используются!)
  */
 const BlockConfig BLOCK_CONFIGS[TOTAL_BLOCKS] = {
   // MEGA #1 - Блоки 1-8
@@ -207,7 +207,7 @@ const BlockConfig BLOCK_CONFIGS[TOTAL_BLOCKS] = {
   {
     .blockNum = 11,
     .megaNum = 2,
-    .actuator1 = {34, 35},  // ПОМЕНЯНО с блоком 12
+    .actuator1 = {34, 35},  // ВАЖНО: Поменяли с блоком 12
     .actuator2 = {36, 37},
     .actuator3 = {0, 0},
     .actuatorCount = 2
@@ -215,7 +215,7 @@ const BlockConfig BLOCK_CONFIGS[TOTAL_BLOCKS] = {
   {
     .blockNum = 12,
     .megaNum = 2,
-    .actuator1 = {30, 31},  // ПОМЕНЯНО с блоком 11
+    .actuator1 = {30, 31},  // ВАЖНО: Поменяли с блоком 11
     .actuator2 = {32, 33},
     .actuator3 = {0, 0},
     .actuatorCount = 2
@@ -231,7 +231,7 @@ const BlockConfig BLOCK_CONFIGS[TOTAL_BLOCKS] = {
   {
     .blockNum = 14,
     .megaNum = 2,
-    .actuator1 = {42, 43},  // Блок 14: 2 актуатора
+    .actuator1 = {42, 43},  // ВАЖНО: 2 актуатора, пины 42-45
     .actuator2 = {44, 45},
     .actuator3 = {0, 0},
     .actuatorCount = 2
@@ -239,9 +239,9 @@ const BlockConfig BLOCK_CONFIGS[TOTAL_BLOCKS] = {
   {
     .blockNum = 15,
     .megaNum = 2,
-    .actuator1 = {46, 47},  // Блок 15: 3 АКТУАТОРА (протестировано)
+    .actuator1 = {46, 47},  // ВАЖНО: 3 АКТУАТОРА, пины 46-51!
     .actuator2 = {48, 49},
-    .actuator3 = {51, 50},  // Третий актуатор (пины инверсные!)
+    .actuator3 = {51, 50},  // ВАЖНО: Инвертирован! UP=51, DOWN=50
     .actuatorCount = 3
   }
 };
